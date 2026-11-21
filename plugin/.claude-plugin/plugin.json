@@ -1,0 +1,19 @@
+{
+  "name": "mac-disk-space",
+  "version": "0.0.1",
+  "description": "磁碟快滿時，量出空間去哪了、哪些能清、清了能拿回多少：APFS 容器各卷、時光機本機快照、swap，以及常見的候選位置。能不能重建逐項判定，雲端同步資料夾只能改成僅線上。設計中，尚未有可用的 skill（MacHelpdesk/mac-helpdesk#9）。",
+  "author": {
+    "name": "Che Cheng"
+  },
+  "license": "MIT",
+  "keywords": [
+    "macos",
+    "disk-space",
+    "apfs",
+    "snapshot",
+    "swap",
+    "cache",
+    "storage",
+    "troubleshooting"
+  ]
+}

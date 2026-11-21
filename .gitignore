@@ -1,0 +1,12 @@
+.DS_Store
+*.log
+*.tmp
+*~
+.remember/
+.claude/.idd/tree-lock
+
+# Personal settings and records never belong in this repository.
+# They live in ~/.config/mac-disk-space/; see README.md.
+records/
+candidates.local.tsv
+problems.local.json
