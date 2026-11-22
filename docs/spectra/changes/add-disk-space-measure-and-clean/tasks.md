@@ -13,9 +13,9 @@
 ## 3. Probe and sizes
 
 - [x] 3.1 `disk-space.sh probe` so that the Probe reports container-level signals, including `purgeable_gb` from the two volume capacity keys, from `diskutil apfs list -plist`, `df -k`, `tmutil listlocalsnapshotdates /` and `sysctl -n vm.swapusage`, with `probe_result=partial` when a source fails; every input has a `DISK_SPACE_*` override. Verified by `tests/test_probe.sh` with fixtures, including the example container of the probe spec.
-- [ ] 3.2 `disk-space.sh sizes` so that Candidate sizes have time limits: Time limits per location and per run of 60 s and 300 s, `not-measured` rows never counted, only listed locations scanned, bash 3.2 without `timeout`. Verified by `tests/test_sizes.sh` with a stub `du` that sleeps past the limit. [after: 2.3]
-- [ ] 3.3 Cloud-synced locations report local footprint only: for `cloud-sync` rows, report on-Mac size and online-only share by the `dataless` flag, following Cloud-synced folders are a separate kind with online-only as the only action. Verified by `tests/test_sizes.sh` with a stub `stat` reporting dataless files. [after: 3.2]
-- [ ] 3.4 Unsafe paths are escaped and Other processes' command lines are never printed: reuse the `emit` approach of mac-timemachine-fix, and add a test that greps all subcommand output for argument strings of a fixture process. Verified by `tests/test_sizes.sh` (a `$(x) Library` folder) and `tests/test_probe.sh`. [after: 3.2]
+- [x] 3.2 `disk-space.sh sizes` so that Candidate sizes have time limits: Time limits per location and per run of 60 s and 300 s, `not-measured` rows never counted, only listed locations scanned, bash 3.2 without `timeout`. Verified by `tests/test_sizes.sh` with a stub `du` that sleeps past the limit. [after: 2.3]
+- [x] 3.3 Cloud-synced locations report local footprint only: for `cloud-sync` rows, report on-Mac size and online-only share by the `dataless` flag, following Cloud-synced folders are a separate kind with online-only as the only action. Verified by `tests/test_sizes.sh` with a stub `stat` reporting dataless files. [after: 3.2]
+- [x] 3.4 Unsafe paths are escaped and Other processes' command lines are never printed: reuse the `emit` approach of mac-timemachine-fix, and add a test that greps all subcommand output for argument strings of a fixture process. Verified by `tests/test_sizes.sh` (a `$(x) Library` folder) and `tests/test_probe.sh`. [after: 3.2]
 
 ## 4. Skill
 

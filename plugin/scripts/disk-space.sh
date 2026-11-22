@@ -3,7 +3,13 @@
 # result up in a knowledge base of known problems.
 #
 #   disk-space.sh probe              print what can be measured, one signal=value per line
-#   disk-space.sh sizes [MIN_GB]     size of each candidate location (see candidates.tsv)
+#   disk-space.sh sizes [MIN_GB]     size of each candidate location in whole GB, tab
+#                                    separated: size (or not-measured), kind, path,
+#                                    command, reason, origin, online-only GB (cloud-sync
+#                                    rows only). Each location gets at most 60 s, the run
+#                                    at most 300 s; a path holding a shell metacharacter
+#                                    or a control character is printed with printf %q and
+#                                    its kind prefixed with unsafe_
 #   disk-space.sh match [FILE]       known problems these signals fit (id, evidence status,
 #                                    origin, title; tab separated). Without a file it runs
 #                                    the probe. Exit 3: no match.
@@ -166,6 +172,87 @@ probe_swap() {
   echo "swap_used_gb=$gb"
 }
 
+LOCATION_LIMIT="${DISK_SPACE_LOCATION_LIMIT:-60}"
+RUN_LIMIT="${DISK_SPACE_RUN_LIMIT:-300}"
+
+# run_limited SECONDS OUTFILE CMD...: run CMD in the background, writing OUTFILE; stop
+# it after SECONDS. Returns 0 when it finished in time, 1 when it was stopped. Bash 3.2
+# and macOS have no timeout(1), so this polls once a second.
+run_limited() {
+  local limit="$1" out="$2" pid waited=0; shift 2
+  "$@" > "$out" 2>/dev/null &
+  pid=$!
+  while kill -0 "$pid" 2>/dev/null; do
+    if [ "$waited" -ge "$limit" ]; then
+      kill "$pid" 2>/dev/null
+      sleep 2
+      kill -9 "$pid" 2>/dev/null
+      wait "$pid" 2>/dev/null
+      return 1
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  wait "$pid" 2>/dev/null
+  return 0
+}
+
+# Online-only files have the dataless flag; their size is never used to decide that.
+dataless_bytes() {
+  find -x "$1" -type f -flags +dataless -print0 2>/dev/null | xargs -0 stat -f %z 2>/dev/null
+  return 0
+}
+
+# emit_row SIZE KIND PATH COMMAND REASON ORIGIN ONLINE_ONLY
+emit_row() {
+  local kind="$2" path="$3"
+  case "$path" in
+    *[\$\`\;\|\&\<\>\\\"\'\!\*\?\[\]\(\)\{\}]*|*[[:cntrl:]]*)
+      kind="unsafe_$kind"; path="$(printf '%q' "$path")" ;;
+  esac
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$1" "$kind" "$path" "$4" "$5" "$6" "$7"
+}
+
+sizes() {
+  local min="${1:-1}" started="$SECONDS" origin pattern kind command reason p left
+  local kb gb online oldifs du="${DISK_SPACE_DU:-du}"
+  local dl="${DISK_SPACE_DATALESS:-}"
+  tmpdir
+  candidates > "$TMPD/candidates"
+  oldifs="$IFS"
+  while IFS='	' read -r origin pattern kind command reason; do
+    case "$pattern" in '~'*) pattern="$HOME${pattern#\~}" ;; esac
+    IFS='
+'
+    for p in $pattern; do
+      IFS="$oldifs"
+      [ -e "$p" ] || continue
+      online=""
+      left=$((RUN_LIMIT - (SECONDS - started)))
+      [ "$left" -gt "$LOCATION_LIMIT" ] && left="$LOCATION_LIMIT"
+      if [ "$left" -le 0 ] || ! run_limited "$left" "$TMPD/du" "$du" -sxk "$p" 2>/dev/null; then
+        emit_row not-measured "$kind" "$p" "$command" "$reason" "$origin" ""
+        continue
+      fi
+      kb="$(tail -1 "$TMPD/du" | cut -f1)"
+      case "$kb" in ''|*[!0-9]*) emit_row not-measured "$kind" "$p" "$command" "$reason" "$origin" ""; continue ;; esac
+      gb=$(( kb * 1024 / GB ))
+      if [ "$kind" = cloud-sync ]; then
+        left=$((RUN_LIMIT - (SECONDS - started)))
+        [ "$left" -gt "$LOCATION_LIMIT" ] && left="$LOCATION_LIMIT"
+        if [ "$left" -gt 0 ] && if [ -n "$dl" ]; then run_limited "$left" "$TMPD/dl" "$dl" "$p" 2>/dev/null; else run_limited "$left" "$TMPD/dl" dataless_bytes "$p" 2>/dev/null; fi; then
+          online="$(awk -v g="$GB" '{ s += $1 } END { printf "%d\n", s / g }' "$TMPD/dl")"
+        else
+          online="not-measured"
+        fi
+      fi
+      [ "$gb" -ge "$min" ] || continue
+      emit_row "$gb" "$kind" "$p" "$command" "$reason" "$origin" "$online"
+    done
+    IFS="$oldifs"
+  done < "$TMPD/candidates"
+}
+
 probe() {
   local result=ok
   probe_container || result=partial
@@ -175,10 +262,11 @@ probe() {
   echo "probe_result=$result"
 }
 
-usage() { sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 64; }
+usage() { sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 64; }
 
 case "${1:-}" in
   probe) probe ;;
+  sizes) sizes "${2:-1}" | sort -t '	' -k1,1nr ;;
   match)
     tmpdir
     if [ -n "${2:-}" ]; then cp "$2" "$TMPD/signals"; else probe > "$TMPD/signals"; fi

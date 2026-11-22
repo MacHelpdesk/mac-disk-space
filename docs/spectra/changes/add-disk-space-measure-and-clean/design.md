@@ -61,7 +61,8 @@ Two facts are not yet measured: whether the space held by local snapshots can be
 | Subcommand | Output |
 |---|---|
 | `probe` | `signal=value` lines: `container_free_pct`, `container_free_gb`, `purgeable_gb`, `volume_used_gb_<role>` for Data, VM, System, Preboot, Recovery, `local_snapshots`, `swap_used_gb`, `probe_result` |
-| `sizes [MIN_GB]` | tab-separated rows: size in GB or `not-measured`, kind, path (escaped and marked `unsafe_` when it holds a shell metacharacter or a control character), reason |
+| `sizes [MIN_GB]` | tab-separated rows: size in GB or `not-measured`, kind (prefixed `unsafe_` when the path holds a shell metacharacter or a control character), path (escaped with `printf %q` in that case), command, reason, origin (`shipped` or `local`), online-only GB for `cloud-sync` rows |
+| `candidates` | every valid candidate line, shipped then personal: origin, path, kind, command, reason; malformed lines reported on stderr |
 | `match [FILE]`, `list`, `show ID`, `validate` | as in `mac-timemachine-fix`; `match` exits 3 when nothing matches |
 
 **Data shapes.** `candidates.tsv`: four tab-separated fields (path with `~` and `*`, kind, command, reason); the command is the only command the skill may run for that row, and is empty for `personal`, `cloud-sync` and `system`; kinds are a closed list: `cache`, `download`, `build`, `personal`, `cloud-sync`, `system`. `problems.json`: the schema of `mac-timemachine-fix` (signals, never, problems with `match.all`, fixes with `class` direct/ask/user and `evidence` verified/reported/unverified).

@@ -1,0 +1,5 @@
+#!/bin/bash
+# stub for the online-only scan: prints the byte size of each online-only file under
+# PATH, read from PATH/.dataless (one number per line).
+[ -r "$1/.dataless" ] && cat "$1/.dataless"
+exit 0
