@@ -35,7 +35,7 @@ MacHelpdesk 系列的磁碟空間工具。整個系列共用的規則（公開 r
 
 ## 狀態
 
-設計中。需求、決定與診斷在 MacHelpdesk/mac-helpdesk#9。下一步是 `spectra-discuss`，不要在 discuss 定案前寫 skill 或刪除類的子命令。
+設計中。需求、決定與診斷在 MacHelpdesk/mac-helpdesk#9；討論已定案，規格在 change `add-disk-space-measure-and-clean`（`docs/spectra/changes/`）。下一步是 `/spectra-apply add-disk-space-measure-and-clean`，從 tasks 的兩個 spike 開始。每週背景量測與通知是之後另一個 change。
 
 ## 這個工具特有的
 
