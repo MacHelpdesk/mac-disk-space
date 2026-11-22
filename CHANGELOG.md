@@ -10,12 +10,13 @@
 - 每次執行只建一個暫存目錄，結束時刪除；0.1.0 的 `probe` 每次會留下五個。
 - 雲端同步資料夾的 `du` 與僅線上掃描共用同一個 60 秒；逾時被停止的量測不會留在背景。`du` 以非零狀態結束時，那一列是 `not-measured`。時間上限的輪詢前 1 秒改為每 0.1 秒一次。
 - `sizes` 每量完一個位置就印一行（照候選清單的順序，不排序），中途被停下時保留已量完的列；收到 TERM 或 INT 時，正在跑的量測一起停。
-- `online-only` 只把 `evict.js` 對那個路徑回報 `ok` 的檔案算成完成，其他都算失敗（結束碼 2）。判斷是否已是僅線上改用一次 `find`，不再每個檔案各跑一次 `stat`。`evict.js` 每處理完一個檔案就印出結果。
+- `online-only` 只把 `evict.js` 對那個路徑回報 `ok` 的檔案算成完成，其他都算失敗（結束碼 2）。判斷是否已是僅線上改用一次 `find`，不再每個檔案各跑一次 `stat`。`evict.js` 每處理完一個檔案就印出結果。`online-only` 被停下（TERM 或 INT）時，停掉正在跑的步驟，仍印出三個計數再結束。
+- 暫存目錄建不起來時（例如磁碟全滿），直接結束並說明原因，結束碼 1，不再回報空的或不完整的結果。
 
 ### 資料與 skill
 
 - `candidates.tsv`：`~/Library/CloudStorage` 拆成 Dropbox、OneDrive、Google Drive 三列，共二十一個位置。
-- `SKILL.md`：沒有指令的 cache、download、build 列與 `unsafe_` 列交給使用者；`sizes` 要把 Bash 逾時設到 330 秒以上或放到背景；`not-measured` 說明兩種原因；「無法估計（清了才知道）」的寫法統一。
+- `SKILL.md`：`online-only` 的 Bash 逾時與被停下時輸出的意思；沒有指令的 cache、download、build 列與 `unsafe_` 列交給使用者；`sizes` 要把 Bash 逾時設到 330 秒以上或放到背景；`not-measured` 說明兩種原因；「無法估計（清了才知道）」的寫法統一。
 
 ### 規格
 
