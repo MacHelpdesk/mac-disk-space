@@ -1,5 +1,7 @@
 #!/bin/bash
 # stub for the online-only scan: prints the byte size of each online-only file under
 # PATH, read from PATH/.dataless (one number per line).
+# a path containing "lagcloud" never finishes: exec so the stub itself is the process to stop
+case "$1" in *lagcloud*) exec sleep 31 ;; esac
 [ -r "$1/.dataless" ] && cat "$1/.dataless"
 exit 0

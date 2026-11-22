@@ -42,7 +42,12 @@ The skill SHALL ask in this conversation, and act only on a yes, for exactly the
 
 ### Requirement: Things left to the user
 
-The skill SHALL only explain the steps, and not perform them, for: deleting the user's own files or folders, including rows of kind `personal`; quitting applications, virtual machines or sessions; making files online-only through a mechanism not recorded as verified; anything in rows of kind `system` that needs administrator rights other than local snapshots. This list is closed.
+The skill SHALL only explain the steps, and not perform them, for: deleting the user's own files or folders, including rows of kind `personal`; deleting rows of kind `cache`, `download` or `build` that have no command; quitting applications, virtual machines or sessions; making files online-only through a mechanism not recorded as verified; anything in rows of kind `system` that needs administrator rights other than local snapshots. This list is closed.
+
+#### Scenario: A build folder without a command
+
+- **WHEN** the user names a row of kind `build` whose command field is empty
+- **THEN** the skill explains what deleting it loses and leaves the deletion to the user, and composes no command
 
 #### Scenario: A large virtual machine
 

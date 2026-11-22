@@ -3,5 +3,7 @@
 # otherwise the size in KiB comes from the file PATH/.size (default 1).
 p="${@: -1}"
 case "$p" in *slow*) sleep 30 ;; esac
+# a path containing "denied" reports a partial total and fails, like du on a folder it cannot read
+case "$p" in *denied*) printf '%s\t%s\n' 1953126 "$p"; echo "du: $p/x: Permission denied" >&2; exit 1 ;; esac
 kb=1; [ -r "$p/.size" ] && kb="$(cat "$p/.size")"
 printf '%s\t%s\n' "$kb" "$p"

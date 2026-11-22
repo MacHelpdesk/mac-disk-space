@@ -15,7 +15,16 @@
 
 ### 資料
 
-- `problems.json` 六筆，全部 `unverified`。`candidates.tsv` 十九個位置，四欄（路徑、種類、指令、理由）；`personal`、`cloud-sync`、`system` 沒有指令。
+- `problems.json` 六筆，全部 `unverified`。`candidates.tsv` 二十一個位置（雲端同步資料夾依服務分列），四欄（路徑、種類、指令、理由）；`personal`、`cloud-sync`、`system` 沒有指令。
+
+### 驗證後的修正（spectra-verify 與 spectra-review）
+
+- 候選清單讀取時，指令欄空白的列不再整欄位移（連續的 tab 不再被合併）。
+- 每次執行只建一個暫存目錄，結束時刪除；先前 `probe` 每次會留下五個。
+- 雲端同步資料夾的 `du` 與僅線上掃描共用同一個 60 秒；逾時被停止的掃描不會留在背景。`du` 以非零狀態結束時，那一列是 `not-measured`。
+- `online-only` 把 `evict.js` 沒有回報的檔案算成失敗，結束碼 2。
+- 時間上限的輪詢前 1 秒改為每 0.1 秒一次。
+- 新增規格 `disk-space-online-only`；沒有指令的 cache、download、build 列，刪除交給使用者。
 
 ### 實測範圍
 

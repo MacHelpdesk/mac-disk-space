@@ -2,29 +2,112 @@
   "schema_version": 1,
   "about": "fixture for tests",
   "signals": {
-    "container_free_pct": { "description": "free space of the container, whole percent", "values": "number" },
-    "local_snapshots": { "description": "number of Time Machine local snapshots", "values": "number" },
-    "probe_result": { "description": "ok or partial", "values": ["ok", "partial"] }
+    "container_free_pct": {
+      "description": "free space of the container, whole percent",
+      "values": "number"
+    },
+    "local_snapshots": {
+      "description": "number of Time Machine local snapshots",
+      "values": "number"
+    },
+    "probe_result": {
+      "description": "ok or partial",
+      "values": [
+        "ok",
+        "partial"
+      ]
+    }
   },
-  "never": [ { "action": "delete files in a cloud-synced folder", "reason": "the deletion syncs to the cloud" } ],
+  "never": [
+    {
+      "action": "delete files in a cloud-synced folder",
+      "reason": "the deletion syncs to the cloud"
+    }
+  ],
   "problems": [
     {
       "id": "fixture-nearly-full",
       "title": "fixture: nearly full",
-      "symptoms": ["little free space"],
-      "match": { "all": [ { "signal": "container_free_pct", "op": "lte", "value": 9 } ] },
+      "symptoms": [
+        "little free space"
+      ],
+      "match": {
+        "all": [
+          {
+            "signal": "container_free_pct",
+            "op": "lte",
+            "value": 9
+          }
+        ]
+      },
       "cause": "fixture",
-      "fixes": [ { "id": "look", "action": "measure", "class": "direct", "evidence": "unverified" } ],
-      "evidence": { "status": "unverified" }
+      "fixes": [
+        {
+          "id": "look",
+          "action": "measure",
+          "class": "direct",
+          "evidence": "unverified"
+        }
+      ],
+      "evidence": {
+        "status": "unverified"
+      }
     },
     {
       "id": "fixture-snapshots",
       "title": "fixture: snapshots",
-      "symptoms": ["snapshots exist"],
-      "match": { "all": [ { "signal": "local_snapshots", "op": "gte", "value": 1 } ] },
+      "symptoms": [
+        "snapshots exist"
+      ],
+      "match": {
+        "all": [
+          {
+            "signal": "local_snapshots",
+            "op": "gte",
+            "value": 1
+          }
+        ]
+      },
       "cause": "fixture",
-      "fixes": [ { "id": "ask", "action": "delete snapshots", "class": "ask", "evidence": "unverified" } ],
-      "evidence": { "status": "unverified" }
+      "fixes": [
+        {
+          "id": "ask",
+          "action": "delete snapshots",
+          "class": "ask",
+          "evidence": "unverified"
+        }
+      ],
+      "evidence": {
+        "status": "unverified"
+      }
+    },
+    {
+      "id": "fixture-snapshots-unknown",
+      "title": "fixture: snapshot count unknown",
+      "symptoms": [
+        "the probe could not count snapshots"
+      ],
+      "match": {
+        "all": [
+          {
+            "signal": "local_snapshots",
+            "op": "equals",
+            "value": "unknown"
+          }
+        ]
+      },
+      "cause": "fixture",
+      "fixes": [
+        {
+          "id": "look",
+          "action": "measure again",
+          "class": "direct",
+          "evidence": "unverified"
+        }
+      ],
+      "evidence": {
+        "status": "unverified"
+      }
     }
   ]
 }
