@@ -25,6 +25,7 @@ When a Mac's internal disk is nearly full, the obvious measurements mislead: `du
 - `disk-space-probe`: read-only measurement of container volumes, local snapshots, swap, free space and candidate locations, with time limits and explicit "not measured" markers
 - `disk-space-knowledge-base`: the known-problem knowledge base and the candidate list, their closed value lists, and how personal additions are read
 - `disk-space-skill`: the per-item judgement table and the closed boundaries of what the skill does directly, asks first, leaves to the user, and never does
+- `disk-space-online-only`: the one subcommand that changes the system, confined to the cloud services whose online-only mechanism was verified, counting unconfirmed files as failed
 
 ### Modified Capabilities
 

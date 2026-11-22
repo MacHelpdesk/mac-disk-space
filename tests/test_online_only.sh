@@ -45,5 +45,19 @@ out="$(DISK_SPACE_DATALESS_TEST="a.txt" /bin/bash "$TOOL" online-only "$ICLOUD/N
 printf '%s\n' "$out" | grep -qx 'online_only_skipped=1' && ok || bad "dataless file not skipped: $out"
 grep -c . "$EVICT_LOG" | grep -qx 1 && ok || bad "a dataless file reached evict"
 
+# evict fails as a whole (prints nothing, exits 1): every listed file counts as failed
+printf '#!/bin/bash\ncat >/dev/null\nexit 1\n' > "$TMPD/evict_dead"; chmod +x "$TMPD/evict_dead"
+out="$(DISK_SPACE_EVICT="$TMPD/evict_dead" /bin/bash "$TOOL" online-only "$ICLOUD/Notes")"; rc=$?
+printf '%s\n' "$out" | grep -qx 'online_only_failed=2' && ok || bad "a dead evict reported: $out"
+printf '%s\n' "$out" | grep -qx 'online_only_done=0' && ok || bad "a dead evict reported done: $out"
+[ "$rc" -eq 2 ] && ok || bad "a dead evict should exit 2, got $rc"
+
+# evict reports only some files and exits 0: the missing ones count as failed
+printf '#!/bin/bash\nIFS= read -r first\necho "ok $first"\ncat >/dev/null\n' > "$TMPD/evict_short"; chmod +x "$TMPD/evict_short"
+out="$(DISK_SPACE_EVICT="$TMPD/evict_short" /bin/bash "$TOOL" online-only "$ICLOUD/Notes")"; rc=$?
+printf '%s\n' "$out" | grep -qx 'online_only_done=1' && ok || bad "short evict done: $out"
+printf '%s\n' "$out" | grep -qx 'online_only_failed=1' && ok || bad "short evict: unreported file not counted: $out"
+[ "$rc" -eq 2 ] && ok || bad "short evict should exit 2, got $rc"
+
 echo "test_online_only: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
