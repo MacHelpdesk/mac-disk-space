@@ -1,0 +1,7 @@
+#!/bin/bash
+# stub du for tests: "du -sxk PATH". A path containing "slow" sleeps past any limit;
+# otherwise the size in KiB comes from the file PATH/.size (default 1).
+p="${@: -1}"
+case "$p" in *slow*) sleep 30 ;; esac
+kb=1; [ -r "$p/.size" ] && kb="$(cat "$p/.size")"
+printf '%s\t%s\n' "$kb" "$p"
