@@ -10,3 +10,9 @@
 records/
 candidates.local.tsv
 problems.local.json
+
+# Spectra app data
+.spectra/
+
+# IDD per-machine config
+.claude/.idd/
