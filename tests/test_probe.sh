@@ -64,8 +64,9 @@ MARK="zz-disk-space-secret-$$"
 /bin/bash -c 'sleep 20' "$MARK" &
 SPY=$!
 all=""
+H="$TMPD/home"; mkdir -p "$H"
 for sub in probe list validate candidates "sizes 0"; do
-  all="$all$(DISK_SPACE_INFO_PLIST=$FX/info_root.plist DISK_SPACE_APFS_PLIST=$FX/apfs_list.plist DISK_SPACE_SNAPSHOTS=$FX/snapshots_two.txt DISK_SPACE_SWAP=$FX/swapusage.txt DISK_SPACE_CAPACITY=$FX/capacity.txt DISK_SPACE_LOCATION_LIMIT=1 DISK_SPACE_RUN_LIMIT=3 /bin/bash "$TOOL" $sub 2>&1)"
+  all="$all$(HOME="$H" DISK_SPACE_CANDIDATES=$FX/candidates_basic.tsv DISK_SPACE_LOCAL_CANDIDATES=$TMPD/none.tsv DISK_SPACE_LOCAL_KB=$TMPD/none.json DISK_SPACE_DU=$PWD/tests/stubs/du DISK_SPACE_DATALESS=$PWD/tests/stubs/dataless DISK_SPACE_INFO_PLIST=$FX/info_root.plist DISK_SPACE_APFS_PLIST=$FX/apfs_list.plist DISK_SPACE_SNAPSHOTS=$FX/snapshots_two.txt DISK_SPACE_SWAP=$FX/swapusage.txt DISK_SPACE_CAPACITY=$FX/capacity.txt DISK_SPACE_LOCATION_LIMIT=1 DISK_SPACE_RUN_LIMIT=3 /bin/bash "$TOOL" $sub 2>&1)"
 done
 kill "$SPY" 2>/dev/null; wait "$SPY" 2>/dev/null
 ps -o args= -p $$ >/dev/null 2>&1   # ps works here, so the marker would be visible to a process listing

@@ -4,7 +4,7 @@
 
 與 [`mac-dropbox-fix`](https://github.com/MacHelpdesk/mac-dropbox-fix)、[`mac-timemachine-fix`](https://github.com/MacHelpdesk/mac-timemachine-fix) 同一個系列：先量測，再判讀，最後才動手。
 
-> **狀態：v0.1.0。** `probe` 與 `sizes` 在 macOS 27.3 上實跑過一次；`online-only` 的機制在 iCloud 雲碟與 Dropbox 各實測一個測試檔。知識庫每一筆都是 `unverified`，候選清單裡的清理指令沒有由這個 skill 在實機上執行過。見〈驗證到哪裡〉。
+> **狀態：v0.1.1。** `probe` 與 `sizes` 在 macOS 27.3 上實跑過一次；`online-only` 的機制在 iCloud 雲碟與 Dropbox 各實測一個測試檔。知識庫每一筆都是 `unverified`，候選清單裡的清理指令沒有由這個 skill 在實機上執行過。見〈驗證到哪裡〉。
 
 ## 它解決什麼
 
@@ -34,7 +34,7 @@
 
 ```bash
 disk-space.sh probe             # signal=value，一行一個；不到一秒
-disk-space.sh sizes 5           # 候選位置的大小（GB），最多 5 分鐘；量不完的標 not-measured
+disk-space.sh sizes 5           # 候選位置的大小（GB），量完一列印一列，最多 5 分鐘；沒量到的標 not-measured
 disk-space.sh match             # 比對到的已知情況；結束碼 3 是沒有比對到
 disk-space.sh show <id>         # 一種情況的完整內容
 disk-space.sh validate          # 檢查知識庫與候選清單（含你自己的追加）
@@ -73,9 +73,9 @@ probe_result=ok
 
 | 行為 | 狀態 |
 |---|---|
-| `probe` 讀出容器各卷、可清除量、本機快照、swap | 已實測一次（macOS 27.3，2026-11-22），不到一秒；可用空間與 `df` 一致 |
+| `probe` 讀出容器各卷、可清除量、本機快照、swap | 已實測一次（0.1.0，macOS 27.3，2026-11-22），不到一秒；可用空間與 `df` 一致 |
 | `purgeable_gb` 的量法 | 已實測一次；它包含哪些資料沒有逐項驗證 |
-| `sizes` 的時間上限與 `not-measured` | 已實測一次（macOS 27.3，2026-11-22）：整次 300 秒用完。萬用字元 `/Users/Shared/* Library` 在那台 Mac 上展開成兩百多個資料夾、每個一列，大部分沒量到；一個很大的套件快取超過 60 秒。標記照規格運作，但列數多到無法逐項判定，見 MacHelpdesk/mac-disk-space#1 |
+| `sizes` 的時間上限與 `not-measured` | 已實測一次（0.1.0，macOS 27.3，2026-11-22；0.1.1 改了輸出順序與停止方式，沒有重跑）：整次 300 秒用完。萬用字元 `/Users/Shared/* Library` 在那台 Mac 上展開成兩百多個資料夾、每個一列，大部分沒量到；一個很大的套件快取超過 60 秒。標記照規格運作，但列數多到無法逐項判定，見 MacHelpdesk/mac-disk-space#1 |
 | `online-only` 的機制（`evictUbiquitousItemAtURL`） | iCloud 雲碟、Dropbox 各實測一個測試檔：1 秒內變成僅線上，再讀一次內容完整。子命令本身只在 `tests/test_online_only.sh` 驗過 |
 | 刪除本機快照後可用空間回升 | 手動做過一次（不是由這個 skill 執行）：刪完後幾分鐘內持續增加 |
 | 候選清單裡的清理指令、OneDrive 與 Google Drive 的僅線上 | 未驗證 |

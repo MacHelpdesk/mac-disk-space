@@ -83,5 +83,18 @@ grep -q 'malformed' "$TMPD/err" && ok || bad "malformed personal candidate not r
 n="$(printf '%s\n' "$out" | awk -F'\t' '$1=="shipped"' | wc -l | tr -d ' ')"
 [ "$n" -ge 1 ] && ok || bad "shipped candidates hidden by a bad personal line"
 
+# a valid personal entry is listed as local, and show tells to ask before every command
+cat > "$TMPD/local.json" <<'EOF_LOCAL'
+{ "schema_version": 1, "problems": [ { "id": "my-entry", "title": "my own entry", "symptoms": ["s"],
+  "match": { "all": [ { "signal": "container_free_pct", "op": "lte", "value": 5 } ] }, "cause": "c",
+  "confirm": ["echo hi"],
+  "fixes": [ { "id": "f", "action": "a", "class": "direct", "command": "echo fix", "evidence": "unverified" } ],
+  "evidence": { "status": "unverified" } } ] }
+EOF_LOCAL
+DISK_SPACE_LOCAL_KB="$TMPD/local.json" /bin/bash "$TOOL" list | awk -F'\t' '$1 == "my-entry" && $3 == "local"' | grep -q . && ok || bad "personal entry not listed as local"
+show="$(DISK_SPACE_LOCAL_KB="$TMPD/local.json" /bin/bash "$TOOL" show my-entry)"
+printf '%s\n' "$show" | grep -q '不論 class 寫什麼' && ok || bad "show of a personal entry does not say to ask first"
+printf '%s\n' "$show" | grep -q '執行前先問' && ok || bad "show of a personal entry does not mark its confirm commands"
+
 echo "test_kb: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
