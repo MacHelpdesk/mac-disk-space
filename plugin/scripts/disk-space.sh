@@ -6,7 +6,8 @@
 #   disk-space.sh sizes [MIN_GB]     size of each candidate location in whole GB, tab
 #                                    separated: size (or not-measured), kind, path,
 #                                    command, reason, origin, online-only GB (cloud-sync
-#                                    rows only). Each location gets at most 60 s, the run
+#                                    rows only), printed as measured in candidate-list
+#                                    order. Each location gets at most 60 s, the run
 #                                    at most 300 s; a path holding a shell metacharacter
 #                                    or a control character is printed with printf %q and
 #                                    its kind prefixed with unsafe_
@@ -45,8 +46,14 @@ CANDIDATES="${DISK_SPACE_CANDIDATES:-$HERE/../data/candidates.tsv}"
 LOCAL_CANDIDATES="${DISK_SPACE_LOCAL_CANDIDATES:-$HOME/.config/mac-disk-space/candidates.local.tsv}"
 
 TMPD=""
+CURRENT_PID=""
 cleanup() { [ -n "$TMPD" ] && rm -rf "$TMPD"; }
+# A run stopped from outside (the caller's time limit, Ctrl-C) stops the measurement in
+# progress too, instead of leaving it to finish on its own.
+stop_child() { [ -n "$CURRENT_PID" ] && kill "$CURRENT_PID" 2>/dev/null; CURRENT_PID=""; }
 trap cleanup EXIT
+trap 'stop_child; exit 143' TERM
+trap 'stop_child; exit 130' INT
 # One temporary directory per run, created in the main shell before any subcommand runs:
 # a directory created inside $(...) or a pipeline would live only in that subshell and
 # the EXIT trap would never see it. An explicit template makes mktemp honour TMPDIR.
@@ -195,6 +202,7 @@ run_limited() {
   local limit="$1" out="$2" pid tenths=0 status; shift 2
   "$@" > "$out" 2>/dev/null &
   pid=$!
+  CURRENT_PID="$pid"
   while kill -0 "$pid" 2>/dev/null; do
     if [ "$tenths" -ge $((limit * 10)) ]; then
       kill "$pid" 2>/dev/null
@@ -202,6 +210,7 @@ run_limited() {
       while kill -0 "$pid" 2>/dev/null && [ "$w" -lt 20 ]; do sleep 0.1; w=$((w + 1)); done
       kill -9 "$pid" 2>/dev/null
       wait "$pid" 2>/dev/null
+      CURRENT_PID=""
       return 1
     fi
     if [ "$tenths" -lt 10 ]; then sleep 0.1; tenths=$((tenths + 1))
@@ -209,6 +218,7 @@ run_limited() {
   done
   wait "$pid"
   status=$?
+  CURRENT_PID=""
   [ "$status" -eq 0 ] && return 0
   return 2
 }
@@ -291,16 +301,8 @@ online_only_roots() {
   done
 }
 
-is_dataless() {
-  if [ -n "${DISK_SPACE_DATALESS_TEST:-}" ]; then
-    [ "$(basename "$1")" = "$DISK_SPACE_DATALESS_TEST" ]; return
-  fi
-  case "$(stat -f %Sf "$1" 2>/dev/null)" in *dataless*) return 0 ;; esac
-  return 1
-}
-
 online_only() {
-  local target real root inside="" f done=0 failed=0 skipped=0
+  local target real root inside="" f done=0 failed=0 skipped=0 listed
   target="${1:-}"
   [ -n "$target" ] || { echo "usage: $0 online-only PATH" >&2; return 64; }
   real="$(physical "$target")"
@@ -313,28 +315,38 @@ $(online_only_roots)
 EOF_ROOTS
   [ -n "$inside" ] || { echo "online-only: refused, not inside iCloud Drive or Dropbox: $target" >&2; return 64; }
   tmpdir
+  # find decides which files are already online-only (one process for the whole folder,
+  # not one stat per file). The test hook stands in for the dataless flag by file name.
+  local is_dl not_dl
+  if [ -n "${DISK_SPACE_DATALESS_TEST:-}" ]; then
+    is_dl=(-name "$DISK_SPACE_DATALESS_TEST"); not_dl=(! -name "$DISK_SPACE_DATALESS_TEST")
+  else
+    is_dl=(-flags +dataless); not_dl=(! -flags +dataless)
+  fi
+  skipped=$(find -x "$real" -type f "${is_dl[@]}" -print0 2>/dev/null | tr -dc '\000' | wc -c | tr -d ' ')
   : > "$TMPD/evict-list"
   while IFS= read -r -d '' f; do
+    # one path per line goes to evict.js, so a name holding a newline cannot be sent
     case "$f" in *'
 '*) failed=$((failed + 1)); continue ;; esac
-    if is_dataless "$f"; then skipped=$((skipped + 1)); else printf '%s\n' "$f" >> "$TMPD/evict-list"; fi
-  done < <(find -x "$real" -type f -print0 2>/dev/null)
+    printf '%s\n' "$f" >> "$TMPD/evict-list"
+  done < <(find -x "$real" -type f "${not_dl[@]}" -print0 2>/dev/null)
   if [ -s "$TMPD/evict-list" ]; then
-    local listed reported ok_n fail_n
     if [ -n "${DISK_SPACE_EVICT:-}" ]; then
       "$DISK_SPACE_EVICT" < "$TMPD/evict-list" > "$TMPD/evict-out" 2>/dev/null
     else
       osascript -l JavaScript "$HERE/evict.js" < "$TMPD/evict-list" > "$TMPD/evict-out" 2>/dev/null
     fi
-    # A file evict.js did not report on (it crashed, was stopped, or was refused by the
-    # system) counts as failed: "done" is only what it confirmed.
+    # A file counts as done only when evict.js reported "ok" for that exact listed path,
+    # once. Every other listed file (reported "fail", not reported, or the step crashed)
+    # counts as failed; lines for paths that were not listed are ignored.
     listed=$(grep -c . "$TMPD/evict-list")
-    ok_n=$(grep -c '^ok ' "$TMPD/evict-out")
-    fail_n=$(grep -c '^fail ' "$TMPD/evict-out")
-    reported=$((ok_n + fail_n))
+    local ok_n
+    ok_n=$(awk 'NR == FNR { want[$0] = 1; next }
+      /^ok / { p = substr($0, 4); if ((p in want) && !(p in seen)) { seen[p] = 1; n++ } }
+      END { print n + 0 }' "$TMPD/evict-list" "$TMPD/evict-out")
     done=$((done + ok_n))
-    failed=$((failed + fail_n))
-    [ "$reported" -lt "$listed" ] && failed=$((failed + listed - reported))
+    failed=$((failed + listed - ok_n))
   fi
   echo "online_only_done=$done"
   echo "online_only_failed=$failed"
@@ -356,7 +368,9 @@ usage() { sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 64; }
 tmpdir
 case "${1:-}" in
   probe) probe ;;
-  sizes) sizes "${2:-1}" | sort -t '	' -k1,1nr ;;
+  # Rows are printed as each location is measured, in the order of the candidate list,
+  # so that a run stopped part-way still has the rows it measured. The skill sorts them.
+  sizes) sizes "${2:-1}" ;;
   match)
     tmpdir
     if [ -n "${2:-}" ]; then cp "$2" "$TMPD/signals"; else probe > "$TMPD/signals"; fi

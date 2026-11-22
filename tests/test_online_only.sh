@@ -59,5 +59,25 @@ printf '%s\n' "$out" | grep -qx 'online_only_done=1' && ok || bad "short evict d
 printf '%s\n' "$out" | grep -qx 'online_only_failed=1' && ok || bad "short evict: unreported file not counted: $out"
 [ "$rc" -eq 2 ] && ok || bad "short evict should exit 2, got $rc"
 
+# evict reports the same file twice and another not at all: done counts files, not lines
+printf '#!/bin/bash\nIFS= read -r first\necho "ok $first"\necho "ok $first"\ncat >/dev/null\n' > "$TMPD/evict_dup"; chmod +x "$TMPD/evict_dup"
+out="$(DISK_SPACE_EVICT="$TMPD/evict_dup" /bin/bash "$TOOL" online-only "$ICLOUD/Notes")"; rc=$?
+printf '%s\n' "$out" | grep -qx 'online_only_done=1' && ok || bad "a repeated ok counted twice: $out"
+printf '%s\n' "$out" | grep -qx 'online_only_failed=1' && ok || bad "the unreported file was not failed: $out"
+[ "$rc" -eq 2 ] && ok || bad "duplicate-ok run should exit 2, got $rc"
+
+# an ok for a path that was not listed does not count
+printf '#!/bin/bash\ncat >/dev/null\necho "ok /somewhere/else"\n' > "$TMPD/evict_other"; chmod +x "$TMPD/evict_other"
+out="$(DISK_SPACE_EVICT="$TMPD/evict_other" /bin/bash "$TOOL" online-only "$ICLOUD/Notes")"
+printf '%s\n' "$out" | grep -qx 'online_only_done=0' && ok || bad "an ok for an unlisted path counted: $out"
+
+# a large folder is listed by find, not one stat per file
+mkdir -p "$DROPBOX/many"; i=0; while [ $i -lt 2000 ]; do : > "$DROPBOX/many/f$i"; i=$((i+1)); done
+s0=$SECONDS
+out="$(/bin/bash "$TOOL" online-only "$DROPBOX/many")"
+took=$((SECONDS - s0))
+printf '%s\n' "$out" | grep -qx 'online_only_done=2000' && ok || bad "2000 files: $out"
+[ "$took" -le 4 ] && ok || bad "2000 files took ${took}s"
+
 echo "test_online_only: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

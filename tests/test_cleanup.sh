@@ -24,11 +24,21 @@ for sub in probe "sizes 0" list validate candidates "match"; do
   [ "$n" -eq 0 ] && ok || bad "$sub left $n entries in TMPDIR: $(ls "$T")"
 done
 
-# probe without overrides reads the real commands through source_file; it must clean up too
-T="$OUTER/real"; mkdir -p "$T"
-TMPDIR="$T" /bin/bash "$TOOL" probe >/dev/null 2>&1
+# probe without overrides runs commands through source_file, which writes their output
+# into the temporary directory; it must clean up too. Stand-in commands on PATH print the
+# fixtures, so this does not read this Mac's disks.
+B="$OUTER/bin"; mkdir -p "$B"
+FXA="$PWD/$FX"
+printf '#!/bin/bash\ncase "$1" in info) cat "%s/info_root.plist" ;; apfs) cat "%s/apfs_list.plist" ;; esac\n' "$FXA" "$FXA" > "$B/diskutil"
+printf '#!/bin/bash\ncat "%s/capacity.txt"\n' "$FXA" > "$B/osascript"
+printf '#!/bin/bash\ncat "%s/snapshots_two.txt"\n' "$FXA" > "$B/tmutil"
+printf '#!/bin/bash\ncat "%s/swapusage.txt"\n' "$FXA" > "$B/sysctl"
+chmod +x "$B"/*
+T="$OUTER/cmd"; mkdir -p "$T"
+out="$(PATH="$B:$PATH" TMPDIR="$T" /bin/bash "$TOOL" probe 2>/dev/null)"
+printf '%s\n' "$out" | grep -qx 'probe_result=ok' && ok || bad "probe through stand-in commands: $out"
 n="$(left "$T")"
-[ "$n" -eq 0 ] && ok || bad "real probe left $n entries in TMPDIR"
+[ "$n" -eq 0 ] && ok || bad "probe through commands left $n entries in TMPDIR"
 
 echo "test_cleanup: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
