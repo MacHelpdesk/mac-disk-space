@@ -25,5 +25,5 @@
 
 ## 5. Release
 
-- [x] 5.1 Run the skill once on a real Mac, record the run under `~/.config/mac-disk-space/records/`, and fill the verification tables of README.md and SKILL.md with what was measured and on which macOS version; bump `plugin/.claude-plugin/plugin.json` to 0.1.0 and update CHANGELOG.md and CLAUDE.md. Verified by `scripts/check-privacy.sh`, all tests, and CI on the pull request. [after: 4.1]
+- [x] 5.1 Run the skill's measuring steps (`probe`, `match`, `sizes`) once on a real Mac, without running any cleaning step, record the run under `~/.config/mac-disk-space/records/`, and fill the verification tables of README.md and SKILL.md with what was measured and on which macOS version; bump `plugin/.claude-plugin/plugin.json` to 0.1.0 and update CHANGELOG.md and CLAUDE.md. Verified by `scripts/check-privacy.sh`, all tests, and CI on the pull request. [after: 4.1]
 - [x] 5.2 Open the follow-ups outside this repository: an issue in MacHelpdesk/mac-helpdesk to add the plugin to the marketplace index, and an issue in MacHelpdesk/mac-timemachine-fix to point `source-disk-nearly-full` to this tool. Verified by the two issue URLs recorded in MacHelpdesk/mac-helpdesk#9. [after: 5.1]
