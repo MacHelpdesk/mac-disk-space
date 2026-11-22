@@ -49,6 +49,13 @@ for c in online-only candidates list validate; do
   case " $agent_cmds " in *" $c "*) bad "agent's list contains $c";; *) ok;; esac
 done
 
+# the script ships without the execute bit, so both callers must go through /bin/bash,
+# and the agent must not chain commands or diagnose a failure with unlisted commands
+grep -qF '/bin/bash <完整路徑> <子命令>' "$A" && ok || bad "agent does not say to run the script through /bin/bash"
+grep -qF '/bin/bash <完整路徑> <子命令>' "$S" && ok || bad "skill does not say to run the script through /bin/bash"
+section '## 只跑這五個指令' "$A" | grep -q '只放一個指令' && ok || bad "agent may chain commands"
+section '## 只跑這五個指令' "$A" | grep -q '不要診斷' && ok || bad "agent has no rule for a failed command"
+
 # spec-example: disk-space-agent / counts line for three rows
 l1="$(grep -n '^### Signals' "$A" | head -n 1 | cut -d: -f1)"
 l2="$(grep -n '^### Matched entries' "$A" | head -n 1 | cut -d: -f1)"

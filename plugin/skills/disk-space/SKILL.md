@@ -26,7 +26,7 @@ allowed-tools:
 
 ## 腳本與資料的位置
 
-- 腳本：`${CLAUDE_PLUGIN_ROOT}/scripts/disk-space.sh`。讀不到時，改用載入本 skill 時顯示的 base directory 往上兩層的 `scripts/disk-space.sh`。下文寫成 `disk-space.sh <子命令>`。
+- 腳本：`${CLAUDE_PLUGIN_ROOT}/scripts/disk-space.sh`。讀不到時，改用載入本 skill 時顯示的 base directory 往上兩層的 `scripts/disk-space.sh`。下文寫成 `disk-space.sh <子命令>`，實際執行一律是 `/bin/bash <完整路徑> <子命令>`：腳本發布時不帶執行權限，直接執行會回 `permission denied`。
 - 知識庫 `${CLAUDE_PLUGIN_ROOT}/data/problems.json`、候選清單 `${CLAUDE_PLUGIN_ROOT}/data/candidates.tsv`：隨 plugin 發布，不要改它們。
 - 使用者自己的條目與位置：`~/.config/mac-disk-space/problems.local.json`、`~/.config/mac-disk-space/candidates.local.tsv`。
 - 紀錄：`~/.config/mac-disk-space/records/`。
@@ -96,7 +96,7 @@ osascript -e 'tell application "Terminal"' -e 'activate' \
 
 先跟使用者說一句：「量測交給 `disk-space-measure` agent 做，最多 5 分鐘，它只跑唯讀指令。」然後用 Agent 工具派出，subagent 類型是 `mac-disk-space:disk-space-measure`。任務訊息只寫兩件事：
 
-- `disk-space.sh` 的完整路徑（見〈腳本與資料的位置〉）。
+- `disk-space.sh` 的完整路徑（見〈腳本與資料的位置〉），寫成「腳本：<完整路徑>」。
 - 「量測並交回報告」。
 
 使用者要求清理的話（例如「清一下快取」）不要轉給 agent：agent 不清理，清理在 Step 3 由主對話逐列問過才做。
