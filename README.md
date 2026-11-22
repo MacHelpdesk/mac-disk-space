@@ -80,7 +80,7 @@ probe_result=ok
 | `online-only` 的機制（`evictUbiquitousItemAtURL`） | iCloud 雲碟、Dropbox 各實測一個測試檔：1 秒內變成僅線上，再讀一次內容完整。子命令本身只在 `tests/test_online_only.sh` 驗過 |
 | 刪除本機快照後可用空間回升 | 手動做過一次（不是由這個 skill 執行）：刪完後幾分鐘內持續增加 |
 | 候選清單裡的清理指令、OneDrive 與 Google Drive 的僅線上 | 未驗證 |
-| `disk-space-measure` agent（由 skill 派出量測與判讀） | 未驗證。唯讀界線靠工具清單（只有 Bash 與 Read）與定義檔裡的封閉列舉，平台不會強制；agent 實際跑了哪些指令，要在實機上讀它的 transcript 才知道 |
+| `disk-space-measure` agent（由 skill 派出量測與判讀） | 未驗證：四項裡缺一項。實跑兩次（macOS 27.3，Claude Code 2.1.330，2026-11-23，無頭模式）。(1) 列數：`sizes` 印出 58 列，交回的表 58 列，其中 4 列 `not-measured`，相符。(2) 指令：修正後那一次 agent 跑了 8 個指令，全部在清單內、一次一個；修正前那一次腳本回 `permission denied`，agent 接著跑了清單外的 `ls` 與 `head`，所以唯讀界線靠工具清單（只有 Bash 與 Read）與定義檔裡的封閉列舉，平台不會強制。(3) 權限提示：**沒有量到**。無頭模式不能回答提示，那一次是事先允許了這些指令；一般互動 session 會跳幾次還不知道。(4) 版本如上。另外量到：整次約 5 分 40 秒，agent 用了約 9 萬 token |
 | 其他 macOS 版本 | 未驗證。讀不到的訊號不會出現，也不會被當成比對到 |
 
 ## 開發

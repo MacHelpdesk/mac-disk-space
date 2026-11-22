@@ -19,6 +19,15 @@
 
 - `tests/test_agent.sh`：定義檔的 frontmatter 與工具清單、指令清單與 `disk-space.sh` 的子命令一致、報告格式、skill 的五件／四種／三種情形，以及 agent 與退路列的子命令相同。
 
+### 修正（第一次實機執行發現）
+
+- `disk-space.sh` 發布時不帶執行權限，直接執行回 `permission denied`（0.1.0 的 skill 也是這樣呼叫）。skill 與 agent 都改成 `/bin/bash <完整路徑> <子命令>`。
+- agent 一次 Bash 呼叫只放一個指令；指令失敗時回報、不診斷。
+
+### 實測範圍
+
+- agent 標為未驗證：列數相符、指令都在清單內、版本都已記錄，但互動 session 的權限提示次數沒有量到。細節在 README〈驗證到哪裡〉。
+
 ### 規格
 
 - 前一個 change `add-disk-space-measure-and-clean` 封存，四份主規格建立在 `docs/spectra/specs/`。
