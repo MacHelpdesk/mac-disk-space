@@ -88,7 +88,7 @@ fb_cmds="$(printf '%s\n' "$fb" | subcommands)"
 grep -q '^### 退回自己量.*只有這四種' "$S" && ok || bad "fallback heading does not say four"
 
 # the README verification table has a row for the agent with a stated status
-row="$(grep -F 'disk-space-measure' README.md | grep '^|' | head -n 1)"
+row="$(section '## 驗證到哪裡' README.md | grep -F 'disk-space-measure' | grep '^|' | head -n 1)"
 case "$row" in *已實測*|*未驗證*) ok;; *) bad "README has no verification row for the agent";; esac
 
 echo "test_agent: $pass passed, $fail failed"

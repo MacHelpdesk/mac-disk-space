@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.2.0 — 2026-11-23
+
+量測交給 subagent。規格在 Spectra change `idd-3-disk-space-measure-agent`（MacHelpdesk/mac-disk-space#3）。
+
+### Agent
+
+- 新增 `mac-disk-space:disk-space-measure`（`plugin/agents/disk-space-measure.md`，model `sonnet`，工具只有 Bash 與 Read）。它只跑五個唯讀指令（`probe`、`match`、`show`、`sizes 5`、`df -k /`），交回固定格式的報告，最後一行是核對數字。不清理、不改設定、不寫檔。
+- 唯讀界線靠工具清單與定義檔裡的封閉列舉。Claude Code 不提供針對 plugin subagent 的逐指令限制，所以平台不會強制這條界線。
+
+### Skill
+
+- `disk-space` 的量測、對照知識庫、量候選位置三步合成一步：派 agent，拿回報告後核對列數，再列逐項判定表。任務清單從六項變四項。
+- 四種情形退回在主對話直接量（使用者不同意、沒有 Agent 工具、agent 失敗、核對列數沒過），先跟使用者說一句。
+- 「直接做」的表從四件變五件，多了派 agent。清理、問使用者、寫紀錄都留在主對話，界線不變。
+
+### 測試
+
+- `tests/test_agent.sh`：定義檔的 frontmatter 與工具清單、指令清單與 `disk-space.sh` 的子命令一致、報告格式、skill 的五件／四種／三種情形，以及 agent 與退路列的子命令相同。
+
+### 規格
+
+- 前一個 change `add-disk-space-measure-and-clean` 封存，四份主規格建立在 `docs/spectra/specs/`。
+
 ## 0.1.0 — 2026-11-22
 
 第一個可用的版本。規格在 Spectra change `add-disk-space-measure-and-clean`（MacHelpdesk/mac-helpdesk#9）。

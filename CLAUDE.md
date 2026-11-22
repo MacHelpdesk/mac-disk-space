@@ -35,7 +35,7 @@ MacHelpdesk 系列的磁碟空間工具。整個系列共用的規則（公開 r
 
 ## 狀態
 
-0.1.0。需求與決定在 MacHelpdesk/mac-helpdesk#9，規格在 change `add-disk-space-measure-and-clean`。每週背景量測與通知（#9 的決定 6–8）是之後另一個 change，會重用 `disk-space.sh probe`。
+0.2.0。需求與決定在 MacHelpdesk/mac-helpdesk#9 與 MacHelpdesk/mac-disk-space#3，主規格在 `docs/spectra/specs/`。每週背景量測與通知（#9 的決定 6–8）是之後另一個 change，會重用 `disk-space.sh probe`。
 
 ## 這個工具特有的
 
@@ -43,6 +43,7 @@ MacHelpdesk 系列的磁碟空間工具。整個系列共用的規則（公開 r
 - **雲端同步資料夾（Dropbox、OneDrive、Google Drive、iCloud 雲碟）不屬於可重建。** 本機刪除會同步刪掉雲端；能做的只有改成僅線上，且要先問。
 - **可釋放量估不出時照實寫「無法估計」。** APFS clone 與本機快照讓「刪了能拿回多少」常常無法事前得知；清前清後各量一次 `df`。
 - **列程序時不印完整指令列**：有些程式把憑證放在參數裡。
+- **量測由 `disk-space-measure` agent 做，清理留在主對話。** agent 的指令清單（`plugin/agents/disk-space-measure.md`）與 skill 退路列的子命令必須相同，`tests/test_agent.sh` 會比對；改一邊就要改另一邊。agent 的工具只有 Bash 與 Read，不要加會寫檔的工具。
 - **`online-only` 是唯一會改動東西的子命令**，只接受 iCloud 雲碟與 Dropbox（spike 1.2 驗證過的兩個）。要加別的服務，先在實機驗證並記錄，再擴充 `online_only_roots`。
 - 系統輸入都有 `DISK_SPACE_*` 覆寫，測試用 `tests/fixtures/` 與 `tests/stubs/`，不碰真的磁碟、快照與雲端。
 - macOS 沒有 `timeout`，時間上限用 `run_limited` 輪詢；背景工作被結束時 bash 會印提示，只在那兩個呼叫上擋 stderr，不要整段擋（會吞掉候選清單的錯誤回報）。
