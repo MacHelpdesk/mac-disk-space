@@ -68,8 +68,111 @@ candidates() {
   return $rc
 }
 
+# plist_get FILE KEYPATH: the raw value, or nothing when the key is missing
+plist_get() { plutil -extract "$2" raw -o - "$1" 2>/dev/null; }
+
+# source_file VAR CMD...: the override file named in VAR, or the command's output saved
+# to a temporary file. Prints the path; prints nothing when the command failed.
+source_file() {
+  local var="$1"; shift
+  eval "local override=\"\${$var:-}\""
+  if [ -n "$override" ]; then
+    [ -r "$override" ] && echo "$override"
+    return
+  fi
+  tmpdir
+  local f="$TMPD/$var"
+  "$@" > "$f" 2>/dev/null && echo "$f"
+}
+
+GB=1000000000
+
+probe_container() {
+  local info apfs ref n i free ceiling nv j role used
+  local data=0 vm=0 system=0 preboot=0 recovery=0 seen=""
+  info="$(source_file DISK_SPACE_INFO_PLIST diskutil info -plist /)"
+  apfs="$(source_file DISK_SPACE_APFS_PLIST diskutil apfs list -plist)"
+  [ -n "$info" ] && [ -n "$apfs" ] || return 1
+  ref="$(plist_get "$info" APFSContainerReference)"
+  n="$(plist_get "$apfs" Containers)"
+  [ -n "$ref" ] && [ -n "$n" ] || return 1
+  i=0
+  while [ "$i" -lt "$n" ]; do
+    if [ "$(plist_get "$apfs" "Containers.$i.ContainerReference")" = "$ref" ]; then
+      ceiling="$(plist_get "$apfs" "Containers.$i.CapacityCeiling")"
+      free="$(plist_get "$apfs" "Containers.$i.CapacityFree")"
+      [ -n "$ceiling" ] && [ "$ceiling" -gt 0 ] 2>/dev/null && [ -n "$free" ] || return 1
+      echo "container_free_pct=$(( free * 100 / ceiling ))"
+      echo "container_free_gb=$(( free / GB ))"
+      nv="$(plist_get "$apfs" "Containers.$i.Volumes")"
+      j=0
+      while [ "$j" -lt "${nv:-0}" ]; do
+        role="$(plist_get "$apfs" "Containers.$i.Volumes.$j.Roles.0")"
+        used="$(plist_get "$apfs" "Containers.$i.Volumes.$j.CapacityInUse")"
+        used="${used:-0}"
+        case "$role" in
+          Data) data=$((data + used)); seen="$seen Data" ;;
+          VM) vm=$((vm + used)); seen="$seen VM" ;;
+          System) system=$((system + used)); seen="$seen System" ;;
+          Preboot) preboot=$((preboot + used)); seen="$seen Preboot" ;;
+          Recovery) recovery=$((recovery + used)); seen="$seen Recovery" ;;
+        esac
+        j=$((j + 1))
+      done
+      case "$seen" in *" Data"*) echo "volume_used_gb_Data=$(( data / GB ))" ;; esac
+      case "$seen" in *" VM"*) echo "volume_used_gb_VM=$(( vm / GB ))" ;; esac
+      case "$seen" in *" System"*) echo "volume_used_gb_System=$(( system / GB ))" ;; esac
+      case "$seen" in *" Preboot"*) echo "volume_used_gb_Preboot=$(( preboot / GB ))" ;; esac
+      case "$seen" in *" Recovery"*) echo "volume_used_gb_Recovery=$(( recovery / GB ))" ;; esac
+      return 0
+    fi
+    i=$((i + 1))
+  done
+  return 1
+}
+
+probe_purgeable() {
+  local f a i
+  f="$(source_file DISK_SPACE_CAPACITY osascript -l JavaScript "$HERE/capacity.js")"
+  [ -n "$f" ] || return 1
+  a="$(sed -n 's/^available=\([0-9][0-9]*\)$/\1/p' "$f")"
+  i="$(sed -n 's/^important=\([0-9][0-9]*\)$/\1/p' "$f")"
+  [ -n "$a" ] && [ -n "$i" ] || return 1
+  if [ "$i" -gt "$a" ]; then echo "purgeable_gb=$(( (i - a) / GB ))"; else echo "purgeable_gb=0"; fi
+}
+
+# Snapshot names are YYYY-MM-DD-HHMMSS; the header line above them may be translated.
+probe_snapshots() {
+  local f
+  f="$(source_file DISK_SPACE_SNAPSHOTS tmutil listlocalsnapshotdates /)"
+  [ -n "$f" ] || return 1
+  echo "local_snapshots=$(grep -cE '^[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{6}$' "$f")"
+}
+
+# sysctl prints "total = 40960.00M  used = 36716.00M  free = ...", in MiB.
+probe_swap() {
+  local f gb
+  f="$(source_file DISK_SPACE_SWAP sysctl -n vm.swapusage)"
+  [ -n "$f" ] || return 1
+  gb="$(awk -v gbytes="$GB" '{
+          for (k = 1; k < NF; k++) if ($k == "used" && $(k+1) == "=") {
+            v = $(k+2); m = 1048576
+            if (v ~ /G$/) m = 1073741824
+            sub(/[MG]$/, "", v)
+            if (v ~ /^[0-9.]+$/) { printf "%d\n", v * m / gbytes; exit }
+          }
+        }' "$f")"
+  [ -n "$gb" ] || return 1
+  echo "swap_used_gb=$gb"
+}
+
 probe() {
-  echo "probe_result=partial"
+  local result=ok
+  probe_container || result=partial
+  probe_purgeable || result=partial
+  probe_snapshots || result=partial
+  probe_swap || result=partial
+  echo "probe_result=$result"
 }
 
 usage() { sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 64; }
