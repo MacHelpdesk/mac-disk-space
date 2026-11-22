@@ -9,6 +9,8 @@ trap 'rm -rf "$TMPD"' EXIT
 H="$TMPD/home"; mkdir -p "$H"
 export HOME="$H" DISK_SPACE_DU="$PWD/tests/stubs/du" DISK_SPACE_DATALESS="$PWD/tests/stubs/dataless"
 export DISK_SPACE_LOCAL_CANDIDATES="$TMPD/none.tsv"
+# unique sleep durations: another test run elsewhere on the machine cannot be mistaken for ours
+export STUB_SLEEP="29.$$" STUB_SLEEP_SCAN="28.$$"
 export DISK_SPACE_LOCATION_LIMIT=2 DISK_SPACE_RUN_LIMIT=20   # test limits; defaults are 60 and 300
 
 pass=0; fail=0
@@ -102,7 +104,7 @@ took=$((SECONDS - s0))
 sleep 1
 # match the exact command line: pgrep -f would also match any shell whose command text
 # merely mentions it
-ps -ax -o command= | grep -qx 'sleep 31' && bad "the stopped online-only scan is still running" || ok
+ps -ax -o command= | grep -qxF "sleep $STUB_SLEEP_SCAN" && bad "the stopped online-only scan is still running" || ok
 
 # fast locations do not each cost a whole polling second
 mkdir -p "$H/f1" "$H/f2" "$H/f3" "$H/f4" "$H/f5" "$H/f6"
@@ -111,6 +113,36 @@ s0=$SECONDS
 DISK_SPACE_CANDIDATES="$TMPD/c_fast.tsv" /bin/bash "$TOOL" sizes 0 >/dev/null 2>&1
 took=$((SECONDS - s0))
 [ "$took" -le 3 ] && ok || bad "six instant locations took ${took}s"
+
+# a stopped du leaves no process (the stub execs sleep 30)
+ps -ax -o command= | grep -qxF "sleep $STUB_SLEEP" && bad "a stopped du is still running" || ok
+
+# rows are printed as they are measured: a run stopped part-way keeps the rows it had,
+# and stopping it stops the du in progress
+mkdir -p "$H/first" "$H/zslow"; echo $((7 * GiB_KB)) > "$H/first/.size"
+printf '~/first\tcache\t\tfirst\n~/zslow\tcache\t\tslow one\n' > "$TMPD/c_stream.tsv"
+DISK_SPACE_CANDIDATES="$TMPD/c_stream.tsv" DISK_SPACE_LOCATION_LIMIT=20 /bin/bash "$TOOL" sizes 0 > "$TMPD/stream.out" 2>/dev/null &
+SP=$!
+sleep 2
+kill -TERM "$SP" 2>/dev/null; wait "$SP" 2>/dev/null
+awk -F'\t' -v p="$H/first" '$3==p && $1==7' "$TMPD/stream.out" | grep -q . && ok || bad "a stopped run lost the rows it had measured: $(cat "$TMPD/stream.out")"
+sleep 1
+ps -ax -o command= | grep -qxF "sleep $STUB_SLEEP" && bad "stopping sizes left its du running" || ok
+
+# INT stops it the same way
+DISK_SPACE_CANDIDATES="$TMPD/c_stream.tsv" DISK_SPACE_LOCATION_LIMIT=20 /bin/bash "$TOOL" sizes 0 > "$TMPD/stream_int.out" 2>/dev/null &
+SP=$!
+sleep 2
+kill -INT "$SP" 2>/dev/null; wait "$SP" 2>/dev/null
+awk -F'\t' -v p="$H/first" '$3==p && $1==7' "$TMPD/stream_int.out" | grep -q . && ok || bad "an INT-stopped run lost its rows"
+sleep 1
+ps -ax -o command= | grep -qxF "sleep $STUB_SLEEP" && bad "INT left the du running" || ok
+
+# a folder name holding a tab is unsafe: the tab would split the row
+TABDIR="$H/tab$(printf '\t')dir"; mkdir -p "$TABDIR"; echo $((3 * GiB_KB)) > "$TABDIR/.size"
+printf '~/tab*\tcache\t\ttab test\n' > "$TMPD/c_tab.tsv"
+out="$(DISK_SPACE_CANDIDATES="$TMPD/c_tab.tsv" /bin/bash "$TOOL" sizes 0 2>/dev/null)"
+[ "$(printf '%s\n' "$out" | awk -F'\t' 'NF == 7 && $2 == "unsafe_cache"' | wc -l | tr -d ' ')" = 1 ] && ok || bad "a tab in a path did not give one 7-field unsafe row: $out"
 
 echo "test_sizes: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

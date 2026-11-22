@@ -59,5 +59,49 @@ printf '%s\n' "$out" | grep -qx 'online_only_done=1' && ok || bad "short evict d
 printf '%s\n' "$out" | grep -qx 'online_only_failed=1' && ok || bad "short evict: unreported file not counted: $out"
 [ "$rc" -eq 2 ] && ok || bad "short evict should exit 2, got $rc"
 
+# evict reports the same file twice and another not at all: done counts files, not lines
+printf '#!/bin/bash\nIFS= read -r first\necho "ok $first"\necho "ok $first"\ncat >/dev/null\n' > "$TMPD/evict_dup"; chmod +x "$TMPD/evict_dup"
+out="$(DISK_SPACE_EVICT="$TMPD/evict_dup" /bin/bash "$TOOL" online-only "$ICLOUD/Notes")"; rc=$?
+printf '%s\n' "$out" | grep -qx 'online_only_done=1' && ok || bad "a repeated ok counted twice: $out"
+printf '%s\n' "$out" | grep -qx 'online_only_failed=1' && ok || bad "the unreported file was not failed: $out"
+[ "$rc" -eq 2 ] && ok || bad "duplicate-ok run should exit 2, got $rc"
+
+# an ok for a path that was not listed does not count
+printf '#!/bin/bash\ncat >/dev/null\necho "ok /somewhere/else"\n' > "$TMPD/evict_other"; chmod +x "$TMPD/evict_other"
+out="$(DISK_SPACE_EVICT="$TMPD/evict_other" /bin/bash "$TOOL" online-only "$ICLOUD/Notes")"
+printf '%s\n' "$out" | grep -qx 'online_only_done=0' && ok || bad "an ok for an unlisted path counted: $out"
+
+# a large folder is listed by find, not one stat per file
+mkdir -p "$DROPBOX/many"; i=0; while [ $i -lt 2000 ]; do : > "$DROPBOX/many/f$i"; i=$((i+1)); done
+s0=$SECONDS
+out="$(/bin/bash "$TOOL" online-only "$DROPBOX/many")"
+took=$((SECONDS - s0))
+printf '%s\n' "$out" | grep -qx 'online_only_done=2000' && ok || bad "2000 files: $out"
+[ "$took" -le 4 ] && ok || bad "2000 files took ${took}s"
+
+# Dropbox-* (a second Dropbox account) is a verified root; a lookalike name is not
+mkdir -p "$H/Library/CloudStorage/Dropbox-Team/t" "$H/Library/CloudStorage/DropboxOld/t"
+echo t > "$H/Library/CloudStorage/Dropbox-Team/t/x"; echo t > "$H/Library/CloudStorage/DropboxOld/t/x"
+out="$(/bin/bash "$TOOL" online-only "$H/Library/CloudStorage/Dropbox-Team/t")"; rc=$?
+[ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -qx 'online_only_done=1' && ok || bad "Dropbox-Team: exit $rc, $out"
+: > "$EVICT_LOG"
+/bin/bash "$TOOL" online-only "$H/Library/CloudStorage/DropboxOld/t" >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 64 ] && ok || bad "DropboxOld should be refused with 64, got $rc"
+[ -s "$EVICT_LOG" ] && bad "a file under DropboxOld reached evict" || ok
+
+# stopped part-way: the files already reported count as done, the rest as failed, and the
+# counts are still printed; the evict step is stopped with it
+SLP="27.$$"
+printf '#!/bin/bash\nIFS= read -r first\necho "ok $first"\nexec sleep %s\n' "$SLP" > "$TMPD/evict_hang"; chmod +x "$TMPD/evict_hang"
+DISK_SPACE_EVICT="$TMPD/evict_hang" /bin/bash "$TOOL" online-only "$ICLOUD/Notes" > "$TMPD/stopped.out" 2>/dev/null &
+OP=$!
+sleep 1
+s0=$SECONDS; kill -TERM "$OP"; wait "$OP"; rc=$?; took=$((SECONDS - s0))
+grep -qx 'online_only_done=1' "$TMPD/stopped.out" && ok || bad "stopped run lost its done count: $(cat "$TMPD/stopped.out")"
+grep -qx 'online_only_failed=1' "$TMPD/stopped.out" && ok || bad "stopped run: the unreported file is not failed: $(cat "$TMPD/stopped.out")"
+[ "$rc" -eq 143 ] && ok || bad "stopped run should exit 143, got $rc"
+[ "$took" -le 3 ] && ok || bad "stopping took ${took}s"
+ps -ax -o command= | grep -qxF "sleep $SLP" && bad "the evict step is still running" || ok
+
 echo "test_online_only: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
