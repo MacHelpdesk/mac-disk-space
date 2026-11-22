@@ -13,18 +13,16 @@ allowed-tools:
 
 ## Step 0：建立任務清單
 
-用 TaskCreate 建立下面六個 task（subject 直接複製），一次建完。做完一個就標 completed。
+用 TaskCreate 建立下面四個 task（subject 直接複製），一次建完。做完一個就標 completed。
 
 | # | subject | 類型 |
 |---|---|---|
-| 1 | 量測容器、快照、可清除量與 swap | 機械 |
-| 2 | 對照知識庫 | 機械 |
-| 3 | 量候選位置的大小 | 機械 |
-| 4 | ⚠️ 列出逐項判定表，問使用者要處理哪幾列 | **判斷** |
-| 5 | 依界線處理使用者點名的列，前後各量一次 df | **判斷** |
-| 6 | 寫紀錄 | 驗證 |
+| 1 | 派 agent 量測並對照知識庫 | 機械 |
+| 2 | ⚠️ 核對列數，列出逐項判定表，問使用者要處理哪幾列 | **判斷** |
+| 3 | 依界線處理使用者點名的列，前後各量一次 df | **判斷** |
+| 4 | 寫紀錄 | 驗證 |
 
-第 4 步不能省：表上最大的那一列不一定是最該清的，有些位置刪了就找不回來，只有使用者知道哪些東西重要。第 5 步只做點名的列：同一類的其他列，使用者沒點名就不動。
+第 2 步不能省：表上最大的那一列不一定是最該清的，有些位置刪了就找不回來，只有使用者知道哪些東西重要。第 3 步只做點名的列：同一類的其他列，使用者沒點名就不動。
 
 ## 腳本與資料的位置
 
@@ -41,14 +39,15 @@ allowed-tools:
 
 下面四張表是封閉列舉，不得依性質相似類推。知識庫解法的 `class` 與這裡不一致時，以比較嚴的那一邊為準。
 
-### 直接做，做完回報：只有這四件
+### 直接做，做完回報：只有這五件
 
 | # | 動作 |
 |---|---|
 | 1 | `disk-space.sh` 的 `probe`、`sizes`、`candidates`、`match`、`list`、`show`、`validate`（都只讀） |
 | 2 | `df -k /` |
-| 3 | 在 `~/.config/mac-disk-space/records/` 寫這次的紀錄 |
-| 4 | 在 `~/.config/mac-disk-space/problems.local.json` 新增條目，或在 `candidates.local.tsv` 新增一行，寫完跑 `validate` |
+| 3 | 派 `mac-disk-space:disk-space-measure` agent 量測與判讀（它只跑唯讀指令，見 Step 1） |
+| 4 | 在 `~/.config/mac-disk-space/records/` 寫這次的紀錄 |
+| 5 | 在 `~/.config/mac-disk-space/problems.local.json` 新增條目，或在 `candidates.local.tsv` 新增一行，寫完跑 `validate` |
 
 ### 先問，使用者在這次對話同意才做：只有這三件
 
@@ -91,13 +90,18 @@ osascript -e 'tell application "Terminal"' -e 'activate' \
 - 不把密碼放進對話、檔案或環境變數。
 - 不處理使用者沒有點名的列，不把同意擴大到同一類的其他列。
 
-## Step 1：量測
+## Step 1：派 agent 量測與判讀
 
-```bash
-disk-space.sh probe
-```
+量測的輸出很長（`sizes` 可能有上百列），交給 agent 做，主對話只留整理好的報告。
 
-不到一秒。把輸出原樣給使用者看。最常用的訊號：
+先跟使用者說一句：「量測交給 `disk-space-measure` agent 做，最多 5 分鐘，它只跑唯讀指令。」然後用 Agent 工具派出，subagent 類型是 `mac-disk-space:disk-space-measure`。任務訊息只寫兩件事：
+
+- `disk-space.sh` 的完整路徑（見〈腳本與資料的位置〉）。
+- 「量測並交回報告」。
+
+使用者要求清理的話（例如「清一下快取」）不要轉給 agent：agent 不清理，清理在 Step 3 由主對話逐列問過才做。
+
+agent 交回的報告有四個部分：`Signals`（`probe` 的輸出）、`Matched entries`（比對到的知識庫條目與解法）、`Candidates`（一個位置一列）、最後一行核對數字。讀 `Signals` 時最常用的訊號：
 
 | 訊號 | 看什麼 |
 |---|---|
@@ -107,23 +111,44 @@ disk-space.sh probe
 | `volume_used_gb_VM`、`swap_used_gb` | 記憶體交換檔；`df /` 看不到 |
 | `probe_result` | `partial` 表示有來源讀不到，那些訊號沒有印出；照實說，不要補猜的數字 |
 
-## Step 2：對照知識庫
+`Candidates` 表裡種類以 `unsafe_` 開頭的列，路徑含 shell 特殊字元或控制字元、已經跳脫過；不要把它放進任何指令，原樣給使用者看。
+
+### 核對列數
+
+報告最後一行是 `sizes_rows=<n> table_rows=<n> not_measured=<n> matched=<n>`。自己數 `Candidates` 表有幾列，和 `sizes_rows` 比：
+
+| 你數到的列數與 `sizes_rows` | 最後一行 | 怎麼做 |
+|---|---|---|
+| 相同 | 有 | 繼續 Step 2 |
+| 不同 | 有 | 跟使用者說量到幾列、交回幾列，然後退回自己量 |
+| 無法比較 | 沒有 | 跟使用者說報告缺核對數字，然後退回自己量 |
+
+這個核對抓得到表格掉了幾列；agent 把兩個數字數錯成同一個值時抓不到。
+
+### 退回自己量：只有這四種
+
+下面四種情形，改由主對話自己量。這張表是封閉列舉，不得依性質相似類推。
+
+| # | 情形 |
+|---|---|
+| 1 | 使用者不同意把量測交給 agent |
+| 2 | 這個 session 沒有 Agent 工具，或找不到 `mac-disk-space:disk-space-measure` |
+| 3 | agent 回報錯誤，或沒有交回報告 |
+| 4 | 核對列數沒有通過（上一張表的後兩列） |
+
+先跟使用者說一句「改成在這個對話裡直接量」和原因，再依序跑：
 
 ```bash
+disk-space.sh probe
 disk-space.sh match
-```
-
-每行一筆：`id`、驗證狀態、來源、標題。對每個 `id` 跑 `disk-space.sh show <id>`。結束碼 3 是沒有比對到：照實說，繼續 Step 3。
-
-## Step 3：量候選位置
-
-```bash
 disk-space.sh sizes 5
 ```
 
-最多 5 分鐘：每個位置最多 60 秒，超過的那一列是 `not-measured`，不算進任何總數。只量清單上的位置，不掃整個家目錄。每行是 tab 分隔的七欄：大小（GB）、種類、路徑、指令、理由、來源（`shipped` 或 `local`）、僅線上 GB（只有 `cloud-sync` 列有）。種類以 `unsafe_` 開頭的列，路徑含 shell 特殊字元或控制字元、已用 `printf %q` 跳脫；不要把它放進任何指令，原樣給使用者看。
+- `probe` 不到一秒，把輸出原樣給使用者看。
+- `match` 每行一筆：`id`、驗證狀態、來源、標題。對每個 `id` 跑 `disk-space.sh show <id>`。結束碼 3 是沒有比對到：照實說，繼續下一個指令。
+- `sizes 5` 最多 5 分鐘：每個位置最多 60 秒，超過的那一列是 `not-measured`，不算進任何總數。只量清單上的位置，不掃整個家目錄。每行是 tab 分隔的七欄：大小（GB）、種類、路徑、指令、理由、來源（`shipped` 或 `local`）、僅線上 GB（只有 `cloud-sync` 列有）。
 
-## Step 4：逐項判定表
+## Step 2：逐項判定表
 
 先講「清單只決定要量哪裡，不決定可以刪」，再列一張表，一個位置一列：
 
@@ -147,7 +172,7 @@ disk-space.sh sizes 5
 
 最後一次問完：「要處理哪幾列？」使用者回的列號就是這次能做的全部。
 
-## Step 5：依界線處理
+## Step 3：依界線處理
 
 只做使用者點名的列，一次一列，照〈行為界線〉的表決定誰動手。每一列：
 
@@ -155,7 +180,7 @@ disk-space.sh sizes 5
 2. 做那一列的動作。
 3. `df -k /`，把前後兩個數字給使用者看。拿回的空間比量到的少時照實說，並說明可能的原因（區塊共用、本機快照）。
 
-## Step 6：寫紀錄
+## Step 4：寫紀錄
 
 寫到 `~/.config/mac-disk-space/records/`，檔名 `YYYY-MM-DDTHHMM±HHMM_<地點>.md`：處理前後的 `probe` 輸出、比對到的條目、使用者點名的列、每一列前後的可用空間。這份紀錄只留在使用者的電腦上。
 
@@ -169,4 +194,5 @@ disk-space.sh sizes 5
 | `sizes` 的時間上限與 `not-measured` | 已實測一次（macOS 27.3）：整次 300 秒用完，萬用字元展開成兩百多列、大部分沒量到。標記照規格運作；列數過多的問題追蹤在 MacHelpdesk/mac-disk-space#1 |
 | 刪除本機快照後可用空間回升 | 在 macOS 27.3 手動做過一次（不是由這個 skill 執行）：刪完後幾分鐘內持續增加 |
 | 候選清單裡的清理指令 | 未驗證 |
+| `disk-space-measure` agent（由 skill 派出量測與判讀） | 未驗證。唯讀界線靠工具清單（只有 Bash 與 Read）與定義檔裡的封閉列舉，平台不會強制；agent 實際跑了哪些指令，要在實機上讀它的 transcript 才知道 |
 | 其他 macOS 版本 | 未驗證。讀不到的訊號不會出現，也不會被當成比對到 |

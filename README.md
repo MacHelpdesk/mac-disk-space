@@ -79,6 +79,7 @@ probe_result=ok
 | `online-only` 的機制（`evictUbiquitousItemAtURL`） | iCloud 雲碟、Dropbox 各實測一個測試檔：1 秒內變成僅線上，再讀一次內容完整。子命令本身只在 `tests/test_online_only.sh` 驗過 |
 | 刪除本機快照後可用空間回升 | 手動做過一次（不是由這個 skill 執行）：刪完後幾分鐘內持續增加 |
 | 候選清單裡的清理指令、OneDrive 與 Google Drive 的僅線上 | 未驗證 |
+| `disk-space-measure` agent（由 skill 派出量測與判讀） | 未驗證。唯讀界線靠工具清單（只有 Bash 與 Read）與定義檔裡的封閉列舉，平台不會強制；agent 實際跑了哪些指令，要在實機上讀它的 transcript 才知道 |
 | 其他 macOS 版本 | 未驗證。讀不到的訊號不會出現，也不會被當成比對到 |
 
 ## 開發
