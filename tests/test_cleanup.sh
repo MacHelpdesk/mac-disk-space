@@ -15,7 +15,7 @@ left() { find "$1" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' '; }
 
 for sub in probe "sizes 0" list validate candidates "match"; do
   T="$OUTER/t$RANDOM"; mkdir -p "$T"
-  TMPDIR="$T" DISK_SPACE_INFO_PLIST="$FX/info_root.plist" DISK_SPACE_APFS_PLIST="$FX/apfs_list.plist" \
+  HOME="$OUTER/home" TMPDIR="$T" DISK_SPACE_INFO_PLIST="$FX/info_root.plist" DISK_SPACE_APFS_PLIST="$FX/apfs_list.plist" \
     DISK_SPACE_SNAPSHOTS="$FX/snapshots_two.txt" DISK_SPACE_SWAP="$FX/swapusage.txt" DISK_SPACE_CAPACITY="$FX/capacity.txt" \
     DISK_SPACE_DU="$PWD/tests/stubs/du" DISK_SPACE_DATALESS="$PWD/tests/stubs/dataless" \
     DISK_SPACE_CANDIDATES="$FX/candidates_basic.tsv" DISK_SPACE_LOCAL_CANDIDATES="$OUTER/none" DISK_SPACE_LOCAL_KB="$OUTER/none.json" \
@@ -39,6 +39,11 @@ out="$(PATH="$B:$PATH" TMPDIR="$T" /bin/bash "$TOOL" probe 2>/dev/null)"
 printf '%s\n' "$out" | grep -qx 'probe_result=ok' && ok || bad "probe through stand-in commands: $out"
 n="$(left "$T")"
 [ "$n" -eq 0 ] && ok || bad "probe through commands left $n entries in TMPDIR"
+
+# a temporary directory that cannot be created (full disk) stops the run with a reason
+err="$(TMPDIR="$OUTER/no/such/dir" /bin/bash "$TOOL" probe 2>&1 >/dev/null)"; rc=$?
+[ "$rc" -eq 1 ] && ok || bad "mktemp failure should exit 1, got $rc"
+printf '%s' "$err" | grep -q 'temporary directory' && ok || bad "mktemp failure gave no reason: $err"
 
 echo "test_cleanup: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

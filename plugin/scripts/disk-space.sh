@@ -50,14 +50,38 @@ CURRENT_PID=""
 cleanup() { [ -n "$TMPD" ] && rm -rf "$TMPD"; }
 # A run stopped from outside (the caller's time limit, Ctrl-C) stops the measurement in
 # progress too, instead of leaving it to finish on its own.
-stop_child() { [ -n "$CURRENT_PID" ] && kill "$CURRENT_PID" 2>/dev/null; CURRENT_PID=""; }
+# ON_STOP names a function that prints what a stopped subcommand had already done.
+ON_STOP=""
+stop_child() {
+  if [ -n "$CURRENT_PID" ]; then
+    local i=0
+    kill "$CURRENT_PID" 2>/dev/null
+    # a child that ignores TERM gets 2 s, then KILL, so stopping never hangs
+    while kill -0 "$CURRENT_PID" 2>/dev/null && [ "$i" -lt 20 ]; do sleep 0.1; i=$((i + 1)); done
+    kill -9 "$CURRENT_PID" 2>/dev/null
+    wait "$CURRENT_PID" 2>/dev/null
+  fi
+  CURRENT_PID=""
+  [ -n "$ON_STOP" ] && "$ON_STOP"
+  ON_STOP=""
+}
 trap cleanup EXIT
 trap 'stop_child; exit 143' TERM
 trap 'stop_child; exit 130' INT
 # One temporary directory per run, created in the main shell before any subcommand runs:
 # a directory created inside $(...) or a pipeline would live only in that subshell and
 # the EXIT trap would never see it. An explicit template makes mktemp honour TMPDIR.
-tmpdir() { [ -n "$TMPD" ] || TMPD="$(mktemp -d "${TMPDIR:-/tmp}/disk-space.XXXXXX")"; }
+# One temporary directory per run. This tool is used when the disk is nearly full, so a
+# directory that cannot be created stops the run with that reason instead of every
+# measurement silently coming back empty.
+tmpdir() {
+  [ -n "$TMPD" ] && return 0
+  TMPD="$(mktemp -d "${TMPDIR:-/tmp}/disk-space.XXXXXX" 2>/dev/null)" || {
+    TMPD=""
+    echo "disk-space: cannot create a temporary directory in ${TMPDIR:-/tmp} (is the disk full?)" >&2
+    exit 1
+  }
+}
 
 kb() { osascript -l JavaScript "$KBJS" "$@"; }
 
@@ -302,7 +326,7 @@ online_only_roots() {
 }
 
 online_only() {
-  local target real root inside="" f done=0 failed=0 skipped=0 listed
+  local target real root inside="" f done=0 failed=0 skipped=0
   target="${1:-}"
   [ -n "$target" ] || { echo "usage: $0 online-only PATH" >&2; return 64; }
   real="$(physical "$target")"
@@ -331,27 +355,42 @@ EOF_ROOTS
 '*) failed=$((failed + 1)); continue ;; esac
     printf '%s\n' "$f" >> "$TMPD/evict-list"
   done < <(find -x "$real" -type f "${not_dl[@]}" -print0 2>/dev/null)
+  : > "$TMPD/evict-out"
   if [ -s "$TMPD/evict-list" ]; then
+    # Run in the background and wait, so that a TERM or INT reaches the trap at once:
+    # the trap stops evict.js and still prints the counts (online_only_report).
     if [ -n "${DISK_SPACE_EVICT:-}" ]; then
-      "$DISK_SPACE_EVICT" < "$TMPD/evict-list" > "$TMPD/evict-out" 2>/dev/null
+      "$DISK_SPACE_EVICT" < "$TMPD/evict-list" > "$TMPD/evict-out" 2>/dev/null &
     else
-      osascript -l JavaScript "$HERE/evict.js" < "$TMPD/evict-list" > "$TMPD/evict-out" 2>/dev/null
+      osascript -l JavaScript "$HERE/evict.js" < "$TMPD/evict-list" > "$TMPD/evict-out" 2>/dev/null &
     fi
-    # A file counts as done only when evict.js reported "ok" for that exact listed path,
-    # once. Every other listed file (reported "fail", not reported, or the step crashed)
-    # counts as failed; lines for paths that were not listed are ignored.
+    CURRENT_PID=$!
+    ON_STOP=online_only_report
+    wait "$CURRENT_PID" 2>/dev/null
+    CURRENT_PID=""; ON_STOP=""
+  fi
+  online_only_report
+  [ "$failed" -eq 0 ] || return 2
+}
+
+# online_only_report: print the counts of online_only. Runs inside online_only (normally,
+# or from the TERM/INT trap), so it sees that function's done, failed and skipped.
+# A file counts as done only when evict.js reported "ok" for that exact listed path, once.
+# Every other listed file (reported "fail", not reported, or the step was stopped or
+# crashed) counts as failed; lines for paths that were not listed are ignored.
+online_only_report() {
+  local listed=0 ok_n=0
+  if [ -s "$TMPD/evict-list" ]; then
     listed=$(grep -c . "$TMPD/evict-list")
-    local ok_n
     ok_n=$(awk 'NR == FNR { want[$0] = 1; next }
       /^ok / { p = substr($0, 4); if ((p in want) && !(p in seen)) { seen[p] = 1; n++ } }
       END { print n + 0 }' "$TMPD/evict-list" "$TMPD/evict-out")
-    done=$((done + ok_n))
-    failed=$((failed + listed - ok_n))
   fi
+  done=$((done + ok_n))
+  failed=$((failed + listed - ok_n))
   echo "online_only_done=$done"
   echo "online_only_failed=$failed"
   echo "online_only_skipped=$skipped"
-  [ "$failed" -eq 0 ] || return 2
 }
 
 probe() {

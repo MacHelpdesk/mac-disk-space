@@ -129,6 +129,15 @@ awk -F'\t' -v p="$H/first" '$3==p && $1==7' "$TMPD/stream.out" | grep -q . && ok
 sleep 1
 ps -ax -o command= | grep -qxF "sleep $STUB_SLEEP" && bad "stopping sizes left its du running" || ok
 
+# INT stops it the same way
+DISK_SPACE_CANDIDATES="$TMPD/c_stream.tsv" DISK_SPACE_LOCATION_LIMIT=20 /bin/bash "$TOOL" sizes 0 > "$TMPD/stream_int.out" 2>/dev/null &
+SP=$!
+sleep 2
+kill -INT "$SP" 2>/dev/null; wait "$SP" 2>/dev/null
+awk -F'\t' -v p="$H/first" '$3==p && $1==7' "$TMPD/stream_int.out" | grep -q . && ok || bad "an INT-stopped run lost its rows"
+sleep 1
+ps -ax -o command= | grep -qxF "sleep $STUB_SLEEP" && bad "INT left the du running" || ok
+
 # a folder name holding a tab is unsafe: the tab would split the row
 TABDIR="$H/tab$(printf '\t')dir"; mkdir -p "$TABDIR"; echo $((3 * GiB_KB)) > "$TABDIR/.size"
 printf '~/tab*\tcache\t\ttab test\n' > "$TMPD/c_tab.tsv"
