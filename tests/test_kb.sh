@@ -21,7 +21,7 @@ DISK_SPACE_KB="$TMPD/badclass.json" /bin/bash "$TOOL" validate >/dev/null 2>&1 &
 
 # list prints id, status, origin, title
 n="$(/bin/bash "$TOOL" list | awk -F'\t' 'NF==4 && $3=="shipped"' | wc -l | tr -d ' ')"
-[ "$n" -eq 2 ] && ok || bad "list printed $n shipped lines, want 2"
+[ "$n" -eq 3 ] && ok || bad "list printed $n shipped lines, want 3"
 
 # match: a condition holds
 printf 'container_free_pct=1\nlocal_snapshots=3\n' > "$TMPD/s1"
@@ -35,7 +35,19 @@ printf 'container_free_pct=30\n' > "$TMPD/s2"
 
 printf 'container_free_pct=unknown\nlocal_snapshots=unknown\n' > "$TMPD/s3"
 got="$(/bin/bash "$TOOL" match "$TMPD/s3" | ids)"
-[ -z "$got" ] && ok || bad "unknown values matched: $got"
+[ "$got" = "fixture-snapshots-unknown " ] && ok || bad "unknown values: only the equals-unknown entry may match, got '$got'"
+
+# the equals-unknown exception needs the signal to be present
+printf 'container_free_pct=30\n' > "$TMPD/s4"
+got="$(/bin/bash "$TOOL" match "$TMPD/s4" | ids)"
+[ -z "$got" ] && ok || bad "an absent signal matched equals-unknown: $got"
+
+# validate rejects an unknown operator, evidence status and signal
+for pair in 's/"op": "lte"/"op": "between"/' 's/"evidence": "unverified"/"evidence": "probably"/' 's/"signal": "container_free_pct"/"signal": "no_such_signal"/'; do
+  sed "$pair" "$FX/kb_basic.json" > "$TMPD/bad.json"
+  cmp -s "$FX/kb_basic.json" "$TMPD/bad.json" && { bad "sed did not change the fixture: $pair"; continue; }
+  DISK_SPACE_KB="$TMPD/bad.json" /bin/bash "$TOOL" validate >/dev/null 2>&1 && bad "validated after: $pair" || ok
+done
 
 # show prints the never list
 /bin/bash "$TOOL" show fixture-snapshots | grep -q '任何情況都不做' && ok || bad "show has no never list"
@@ -60,7 +72,7 @@ done
 # ---- Personal additions never hide shipped entries
 printf '{ not json' > "$TMPD/broken.json"
 n="$(DISK_SPACE_LOCAL_KB="$TMPD/broken.json" /bin/bash "$TOOL" list 2>/dev/null | awk -F'\t' '$3=="shipped"' | wc -l | tr -d ' ')"
-[ "$n" -eq 2 ] && ok || bad "broken personal kb hid shipped entries ($n listed)"
+[ "$n" -eq 3 ] && ok || bad "broken personal kb hid shipped entries ($n listed)"
 DISK_SPACE_LOCAL_KB="$TMPD/broken.json" /bin/bash "$TOOL" list 2>&1 >/dev/null | grep -q 'left out' && ok || bad "broken personal kb not reported"
 
 printf '~/mine\tcache\t\tmy cache\n~/bad\tsafe\t\tbad kind\n' > "$TMPD/local.tsv"
