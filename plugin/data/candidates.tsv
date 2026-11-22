@@ -1,0 +1,24 @@
+# 要量的位置。tab 分隔四欄：路徑（~ 開頭代表家目錄，可用 * 萬用字元）、種類、清理指令、理由。
+# 這份清單只決定「要量哪裡」，不決定「可以刪」：每一列都由使用者判定。
+# 種類只有六種：cache、download、build、personal、cloud-sync、system。
+# 指令欄只放該工具自己的清理指令；personal、cloud-sync、system 一律留空，skill 不替使用者執行任何指令。
+# 個人追加寫在 ~/.config/mac-disk-space/candidates.local.tsv，格式相同。
+~/.cache/uv	cache	uv cache prune	uv 的套件快取；與虛擬環境共用磁碟區塊，清了能拿回多少要清了才知道，之後安裝會重新下載
+~/Library/Caches/pip	cache	pip cache purge	pip 的套件快取；之後安裝會重新下載
+~/.npm	cache	npm cache clean --force	npm 的套件快取；之後安裝會重新下載
+~/Library/Caches/Homebrew	cache	brew cleanup --prune=all	Homebrew 下載過的安裝檔與舊版本；之後安裝會重新下載
+~/.cache/huggingface	download		Hugging Face 下載的模型與資料集；可重新下載，但檔案大、重新下載很久；若放了自己訓練的結果就不是可重建的
+~/.ollama	download		Ollama 下載的模型；可用 ollama rm 逐一刪除
+~/.lmstudio	download		LM Studio 下載的模型
+~/Library/Developer/Xcode/DerivedData	build		Xcode 的編譯產物；下次編譯會重建，第一次會比較久
+~/Library/Developer/CoreSimulator	build	xcrun simctl delete unavailable	iOS 模擬器；指令只刪除已不受目前 Xcode 支援的模擬器
+~/Library/Developer/Xcode/iOS DeviceSupport	build		Xcode 連接實機時下載的除錯符號；再接上裝置時會重新下載
+~/Library/Containers/com.docker.docker	personal		Docker 的映像、容器與 volume；volume 裡可能有資料庫
+~/Library/CloudStorage	cloud-sync		Dropbox、OneDrive、Google Drive 的同步資料夾；本機刪除會同步刪除雲端，只能改成僅線上
+~/Library/Mobile Documents/com~apple~CloudDocs	cloud-sync		iCloud 雲碟；本機刪除會同步刪除雲端，只能改成僅線上
+~/Parallels	personal		Parallels 虛擬機；整個虛擬磁碟是一個檔案，刪除就失去虛擬機
+~/Virtual Machines.localized	personal		VMware 虛擬機
+~/Downloads	personal		下載資料夾；內容是使用者自己的
+~/Movies	personal		影片
+~/.Trash	personal		垃圾桶；清空後無法復原
+/Users/Shared/* Library	download		Native Instruments 等音源庫；可從原廠程式重新下載

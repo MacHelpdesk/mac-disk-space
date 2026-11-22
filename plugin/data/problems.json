@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "about": "Mac 內建磁碟快滿時的已知情況。每筆有症狀、量得到的訊號、原因、解法與驗證狀態。解法的 class：direct 直接做、ask 先問使用者、user 只能由使用者自己做。個人條目放 ~/.config/mac-disk-space/problems.local.json。",
+  "signals": {
+    "container_free_pct": { "description": "開機磁碟所在 APFS 容器的剩餘空間，整數百分比（無條件捨去）", "values": "number" },
+    "container_free_gb": { "description": "同一容器的剩餘空間，整數 GB（10^9 bytes，無條件捨去）", "values": "number" },
+    "purgeable_gb": { "description": "系統可以從可清除資料拿回的空間，整數 GB：「重要用途可用空間」減「可用空間」。包含本機快照與其他可清除的資料，不是只有快照", "values": "number" },
+    "volume_used_gb_Data": { "description": "Data 卷（使用者資料）佔用，整數 GB", "values": "number" },
+    "volume_used_gb_VM": { "description": "VM 卷（記憶體交換檔）佔用，整數 GB", "values": "number" },
+    "volume_used_gb_System": { "description": "System 卷佔用，整數 GB", "values": "number" },
+    "volume_used_gb_Preboot": { "description": "Preboot 卷佔用，整數 GB", "values": "number" },
+    "volume_used_gb_Recovery": { "description": "Recovery 卷佔用，整數 GB", "values": "number" },
+    "local_snapshots": { "description": "時光機本機快照的數量", "values": "number" },
+    "swap_used_gb": { "description": "已使用的記憶體交換空間，整數 GB", "values": "number" },
+    "probe_result": { "description": "ok：每個來源都讀到；partial：有來源讀不到，那些訊號沒有印出", "values": ["ok", "partial"] }
+  },
+  "never": [
+    { "action": "刪除或修改雲端同步資料夾（Dropbox、OneDrive、Google Drive、iCloud 雲碟）裡的任何檔案", "reason": "本機刪除會同步刪除雲端那份；要拿回空間只能改成僅線上" },
+    { "action": "用 rm -rf 清快取資料夾，取代該工具自己的清理指令", "reason": "工具自己的指令知道哪些檔案還在使用；直接刪可能弄壞還在用的環境" },
+    { "action": "碰備份碟上的任何東西", "reason": "那是使用者的備份歷史，不屬於這台 Mac 的空間" },
+    { "action": "把密碼放進對話、檔案或環境變數", "reason": "需要管理者權限的步驟開終端機視窗，由使用者自己輸入密碼" },
+    { "action": "處理使用者沒有點名的列，或把同意擴大到同一類的其他列", "reason": "每一列刪了會失去什麼，只有使用者知道" }
+  ],
+  "problems": [
+    {
+      "id": "container-nearly-full-percent",
+      "title": "磁碟快滿了（剩不到 10%）",
+      "symptoms": [ "存檔失敗或很慢", "時光機一直失敗", "系統提示磁碟空間不足" ],
+      "match": { "all": [ { "signal": "container_free_pct", "op": "lte", "value": 9 } ] },
+      "cause": "剩餘空間太少時，macOS 會先回收可清除的資料（包括時光機下一次備份要用的本機快照），程式也可能存不了檔。",
+      "fixes": [
+        { "id": "measure", "action": "量出候選位置的大小，列成一張表給使用者逐項判定", "class": "direct", "command": "disk-space.sh sizes 5", "evidence": "unverified" },
+        { "id": "clean-named-rows", "action": "只對使用者點名的列執行該列的清理指令，清前清後各量一次 df -k", "class": "ask", "side_effects": "依每一列而定，問的時候逐列說明", "verify": "container_free_pct 回到 10 以上", "evidence": "unverified" }
+      ],
+      "evidence": { "status": "unverified", "note": "門檻是使用者在 MacHelpdesk/mac-helpdesk#9 決定的；解法還沒有在實機跑過" }
+    },
+    {
+      "id": "container-nearly-full-size",
+      "title": "磁碟快滿了（剩不到 50 GB）",
+      "symptoms": [ "大容量的磁碟百分比看起來還好，但實際剩下的空間很少" ],
+      "match": { "all": [ { "signal": "container_free_gb", "op": "lte", "value": 49 } ] },
+      "cause": "容量很大的磁碟，剩 10% 仍有好幾百 GB；但剩不到 50 GB 時，下載模型、裝大型程式或一次備份就可能用完。",
+      "fixes": [
+        { "id": "measure", "action": "量出候選位置的大小，列成一張表給使用者逐項判定", "class": "direct", "command": "disk-space.sh sizes 5", "evidence": "unverified" },
+        { "id": "clean-named-rows", "action": "只對使用者點名的列執行該列的清理指令，清前清後各量一次 df -k", "class": "ask", "verify": "container_free_gb 回到 50 以上", "evidence": "unverified" }
+      ],
+      "evidence": { "status": "unverified", "note": "門檻是使用者在 MacHelpdesk/mac-helpdesk#9 決定的；解法還沒有在實機跑過" }
+    },
+    {
+      "id": "local-snapshots-hold-deleted-data",
+      "title": "時光機本機快照讓刪掉的檔案仍佔著空間",
+      "symptoms": [ "刪了大檔案或清了快取，df 卻幾乎沒變" ],
+      "match": { "all": [
+        { "signal": "local_snapshots", "op": "gte", "value": 1 },
+        { "signal": "container_free_pct", "op": "lte", "value": 20 }
+      ] },
+      "cause": "本機快照保留了建立之後被刪除或改寫的檔案的舊版本；快照還在，那些磁碟區塊就不會釋放。時光機開著時會定期建新的快照。",
+      "fixes": [
+        { "id": "delete-local-snapshots", "action": "刪除時光機本機快照", "class": "ask", "command": "sudo tmutil deletelocalsnapshots /", "side_effects": "快照裡保留的「快照之後被改寫或刪掉的檔案的舊版本」會消失，救不回來；下一次備份可能要從頭掃描。需要管理者密碼：開終端機視窗，由使用者自己輸入", "verify": "local_snapshots 是 0，並且 df -k 的可用空間變多", "evidence": "unverified" }
+      ],
+      "evidence": { "status": "unverified", "note": "訊號與現象在 macOS 27.3 實際觀察到（刪快照後可用空間在幾分鐘內持續回升）；工具本身還沒有跑過這個解法" }
+    },
+    {
+      "id": "purgeable-data-large",
+      "title": "可清除的資料很多",
+      "symptoms": [ "Finder 顯示的可用空間比 df 多很多" ],
+      "match": { "all": [ { "signal": "purgeable_gb", "op": "gte", "value": 20 } ] },
+      "cause": "系統有一批可以清除的資料（本機快照、iCloud 已上傳的檔案、系統快取等），需要空間時會先清掉。purgeable_gb 是它們的總量，沒有辦法單獨算出快照佔多少。",
+      "fixes": [
+        { "id": "explain", "action": "向使用者說明這個數字包含快照與其他可清除資料，不是只有快照", "class": "direct", "evidence": "unverified" },
+        { "id": "delete-local-snapshots", "action": "刪除時光機本機快照", "class": "ask", "command": "sudo tmutil deletelocalsnapshots /", "side_effects": "同 local-snapshots-hold-deleted-data", "verify": "purgeable_gb 變小，df -k 的可用空間變多", "evidence": "unverified" }
+      ],
+      "evidence": { "status": "unverified", "note": "量法在 macOS 27.3 實測過（兩個容量值相減）；它包含哪些資料沒有逐項驗證" }
+    },
+    {
+      "id": "swap-volume-large",
+      "title": "記憶體交換檔佔了很多空間",
+      "symptoms": [ "df / 與家目錄的 du 加起來，對不上實際用掉的空間" ],
+      "match": { "all": [ { "signal": "swap_used_gb", "op": "gte", "value": 16 } ] },
+      "cause": "記憶體不夠時，系統把資料寫進同一個 APFS 容器裡的 VM 卷。df / 與 du 都看不到這一卷。",
+      "fixes": [
+        { "id": "quit-apps", "action": "關掉用不到的程式、虛擬機或 session；記憶體壓力降下來後交換檔會縮小", "class": "user", "verify": "swap_used_gb 變小", "evidence": "unverified" }
+      ],
+      "evidence": { "status": "unverified", "note": "門檻 16 GB 是估計值，還沒有量過多少才會造成問題" }
+    },
+    {
+      "id": "cache-shares-blocks",
+      "title": "快取和其他檔案共用磁碟區塊，清了拿回的比量到的少",
+      "symptoms": [ "du 量到快取很大，清掉之後 df 只多一點" ],
+      "match": { "all": [ { "signal": "container_free_pct", "op": "lte", "value": 20 } ] },
+      "cause": "APFS 的 clone 讓快取和用它建出來的檔案（例如虛擬環境）共用同一批區塊；du 會把共用的部分算兩次。清快取只釋放沒被其他檔案用到的那部分。",
+      "fixes": [
+        { "id": "measure-before-after", "action": "清之前與清之後各量一次 df -k，照實回報差值；事前寫「清了才知道」", "class": "direct", "evidence": "unverified" }
+      ],
+      "evidence": { "status": "unverified", "note": "在 macOS 27.3 觀察到：清 uv 快取時 df 增加的量遠少於 du 量到的大小（當時本機快照也還在，兩個原因沒有分開量）" }
+    }
+  ]
+}

@@ -9,7 +9,11 @@
 #                                    the probe. Exit 3: no match.
 #   disk-space.sh list               every known problem
 #   disk-space.sh show ID            one problem: symptoms, cause, fixes, what does not work
-#   disk-space.sh validate           check problems.json and the personal additions
+#   disk-space.sh validate           check problems.json, candidates.tsv and the personal
+#                                    additions; exit 1 on any malformed line or entry
+#   disk-space.sh candidates         every valid candidate line, shipped and personal:
+#                                    origin, path, kind, command, reason (tab separated).
+#                                    A malformed line is reported on stderr and skipped
 #
 # Every subcommand reads; none deletes a file, changes a setting or starts a backup.
 # What the skill may change is decided in plugin/skills/disk-space/SKILL.md.
@@ -25,6 +29,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 KB="${DISK_SPACE_KB:-$HERE/../data/problems.json}"
 LOCAL_KB="${DISK_SPACE_LOCAL_KB:-$HOME/.config/mac-disk-space/problems.local.json}"
 KBJS="$HERE/kb.js"
+CANDIDATES="${DISK_SPACE_CANDIDATES:-$HERE/../data/candidates.tsv}"
+LOCAL_CANDIDATES="${DISK_SPACE_LOCAL_CANDIDATES:-$HOME/.config/mac-disk-space/candidates.local.tsv}"
 
 TMPD=""
 cleanup() { [ -n "$TMPD" ] && rm -rf "$TMPD"; }
@@ -33,11 +39,40 @@ tmpdir() { [ -n "$TMPD" ] || TMPD="$(mktemp -d)"; }
 
 kb() { osascript -l JavaScript "$KBJS" "$@"; }
 
+# check_candidates ORIGIN FILE: print valid lines as ORIGIN<TAB>line, report the
+# others on stderr. Exit 1 when a line was malformed. Kinds are a closed list; the
+# command field must be empty for personal, cloud-sync and system, because the skill
+# runs no command for those rows.
+check_candidates() {
+  [ -r "$2" ] || return 0
+  awk -F'\t' -v origin="$1" -v file="$2" '
+    /^#/ || /^[[:space:]]*$/ { next }
+    {
+      why = ""
+      if (NF != 4) why = "needs 4 tab-separated fields, has " NF
+      else if ($1 == "") why = "empty path"
+      else if ($2 !~ /^(cache|download|build|personal|cloud-sync|system)$/) why = "unknown kind \"" $2 "\""
+      else if ($3 != "" && $2 ~ /^(personal|cloud-sync|system)$/) why = "kind " $2 " must have an empty command"
+      else if ($4 == "") why = "empty reason"
+      if (why != "") { printf "%s:%d: malformed candidate (%s)\n", file, NR, why > "/dev/stderr"; bad = 1; next }
+      print origin "\t" $0
+    }
+    END { exit bad }
+  ' "$2"
+}
+
+candidates() {
+  local rc=0
+  check_candidates shipped "$CANDIDATES" || rc=1
+  check_candidates local "$LOCAL_CANDIDATES" || rc=1
+  return $rc
+}
+
 probe() {
   echo "probe_result=partial"
 }
 
-usage() { sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 64; }
+usage() { sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 64; }
 
 case "${1:-}" in
   probe) probe ;;
@@ -50,6 +85,13 @@ case "${1:-}" in
     ;;
   list) kb list "$KB" "$LOCAL_KB" ;;
   show) [ -n "${2:-}" ] || { echo "usage: $0 show ID" >&2; exit 64; }; kb show "$KB" "$LOCAL_KB" "$2" ;;
-  validate) kb validate "$KB" "$LOCAL_KB" ;;
+  validate)
+    rc=0
+    kb validate "$KB" "$LOCAL_KB" || rc=1
+    candidates >/dev/null || rc=1
+    [ "$rc" -eq 0 ] && echo "candidates are valid"
+    exit $rc
+    ;;
+  candidates) candidates; exit 0 ;;
   *) usage ;;
 esac

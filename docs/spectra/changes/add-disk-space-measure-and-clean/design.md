@@ -97,3 +97,18 @@ Result: no source gives the space held by local snapshots alone. The difference 
 ### Candidate rows carry their cleaning command
 
 Decided 2026-11-22. The skill spec says the skill runs "the cleaning command listed for a candidate", but the candidate list had no field for it. Decided with the user: a fourth field `command`, empty for `personal`, `cloud-sync` and `system`, so that the skill runs only a command written in the list and never composes one.
+
+### Spike 1.2: which mechanism makes a downloaded file online-only? (macOS 27.3, 2026-11-22)
+
+`brctl` (subcommands: diagnose, log, dump, status, accounts, monitor) and `fileproviderctl` (dump, diagnose, evaluate, check, repair, obfuscate) have no evict command on this version. The Foundation call `-[NSFileManager evictUbiquitousItemAtURL:error:]`, made through JXA, was tried on one small test file per service:
+
+| Service | Result | How it was checked |
+|---|---|---|
+| iCloud Drive | verified | after reading the file its flags were `-`; the call returned true and within 1 s `stat -f %Sf` showed `compressed,dataless`; reading it again downloaded it with the same content |
+| Dropbox (File Provider) | verified | same steps and same result |
+| OneDrive | not tested | not available on the test Mac's run |
+| Google Drive | not tested | not available on the test Mac's run |
+
+Only iCloud Drive and Dropbox may appear as verified mechanisms in "Things the skill asks first"; OneDrive and Google Drive stay with the user in Finder until tested.
+
+Observed while waiting for the upload: with little free space on the container, both test files became online-only about 45 seconds after upload without any call. A test of the mechanism therefore downloads the file first and reads the flag right after the call.

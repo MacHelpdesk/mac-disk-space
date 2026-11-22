@@ -40,5 +40,36 @@ got="$(/bin/bash "$TOOL" match "$TMPD/s3" | ids)"
 # show prints the never list
 /bin/bash "$TOOL" show fixture-snapshots | grep -q '任何情況都不做' && ok || bad "show has no never list"
 
+
+# ---- candidates.tsv (Candidate list kinds; Candidate rows carry their cleaning command)
+export DISK_SPACE_CANDIDATES="$FX/candidates_basic.tsv"
+export DISK_SPACE_LOCAL_CANDIDATES="$TMPD/none.tsv"
+/bin/bash "$TOOL" validate >/dev/null 2>&1 && ok || bad "fixture candidates do not validate"
+
+printf '~/x\tsafe\t\tunknown kind\n' > "$TMPD/c_kind.tsv"
+DISK_SPACE_CANDIDATES="$TMPD/c_kind.tsv" /bin/bash "$TOOL" validate >/dev/null 2>&1 && bad "unknown kind validated" || ok
+
+printf '~/x\tcache\tonly three fields\n' > "$TMPD/c_fields.tsv"
+DISK_SPACE_CANDIDATES="$TMPD/c_fields.tsv" /bin/bash "$TOOL" validate >/dev/null 2>&1 && bad "three-field line validated" || ok
+
+for k in cloud-sync personal system; do
+  printf '~/x\t%s\trm -rf ~/x\twith a command\n' "$k" > "$TMPD/c_cmd.tsv"
+  DISK_SPACE_CANDIDATES="$TMPD/c_cmd.tsv" /bin/bash "$TOOL" validate >/dev/null 2>&1 && bad "$k line with a command validated" || ok
+done
+
+# ---- Personal additions never hide shipped entries
+printf '{ not json' > "$TMPD/broken.json"
+n="$(DISK_SPACE_LOCAL_KB="$TMPD/broken.json" /bin/bash "$TOOL" list 2>/dev/null | awk -F'\t' '$3=="shipped"' | wc -l | tr -d ' ')"
+[ "$n" -eq 2 ] && ok || bad "broken personal kb hid shipped entries ($n listed)"
+DISK_SPACE_LOCAL_KB="$TMPD/broken.json" /bin/bash "$TOOL" list 2>&1 >/dev/null | grep -q 'left out' && ok || bad "broken personal kb not reported"
+
+printf '~/mine\tcache\t\tmy cache\n~/bad\tsafe\t\tbad kind\n' > "$TMPD/local.tsv"
+out="$(DISK_SPACE_LOCAL_CANDIDATES="$TMPD/local.tsv" /bin/bash "$TOOL" candidates 2>"$TMPD/err")"
+printf '%s\n' "$out" | grep -q '	~/mine	' && ok || bad "valid personal candidate dropped: $out"
+printf '%s\n' "$out" | grep -q 'bad' && bad "malformed personal candidate kept" || ok
+grep -q 'malformed' "$TMPD/err" && ok || bad "malformed personal candidate not reported"
+n="$(printf '%s\n' "$out" | awk -F'\t' '$1=="shipped"' | wc -l | tr -d ' ')"
+[ "$n" -ge 1 ] && ok || bad "shipped candidates hidden by a bad personal line"
+
 echo "test_kb: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
