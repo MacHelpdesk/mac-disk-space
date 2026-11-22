@@ -160,7 +160,7 @@ disk-space.sh sizes 5
 | `probe` 讀出容器各卷、可清除量、本機快照、swap | 已實測一次（macOS 27.3，2026-11-22），不到一秒；可用空間與 `df` 一致 |
 | `purgeable_gb` 的量法（兩個容量值相減） | 已實測一次；它包含哪些資料沒有逐項驗證 |
 | `online-only` 的機制（`evictUbiquitousItemAtURL`） | iCloud 雲碟、Dropbox 各實測一個測試檔（macOS 27.3）：1 秒內變成 `dataless`，再讀一次內容完整；`online-only` 子命令本身只在 `tests/test_online_only.sh` 驗過 |
-| `sizes` 的時間上限與 `not-measured` | 只在 `tests/test_sizes.sh` 驗過 |
+| `sizes` 的時間上限與 `not-measured` | 已實測一次（macOS 27.3）：整次 300 秒用完，萬用字元展開成兩百多列、大部分沒量到。標記照規格運作；列數過多的問題追蹤在 MacHelpdesk/mac-disk-space#1 |
 | 刪除本機快照後可用空間回升 | 在 macOS 27.3 手動做過一次（不是由這個 skill 執行）：刪完後幾分鐘內持續增加 |
 | 候選清單裡的清理指令 | 未驗證 |
 | 其他 macOS 版本 | 未驗證。讀不到的訊號不會出現，也不會被當成比對到 |
