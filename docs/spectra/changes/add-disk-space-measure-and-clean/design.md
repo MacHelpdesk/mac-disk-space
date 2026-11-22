@@ -56,13 +56,14 @@ Two facts are not yet measured: whether the space held by local snapshots can be
 
 **Behavior.** `/mac-disk-space:disk-space` measures, looks the signals up, prints one table of candidates, asks which rows to act on, acts only on those rows within the boundary tables, and measures again. Nothing is deleted or changed without the user naming the row in this conversation.
 
-**Interface.** `plugin/scripts/disk-space.sh` subcommands, all read-only:
+**Interface.** `plugin/scripts/disk-space.sh` subcommands. All of them only read, except `online-only`, which removes local copies whose cloud copy stays; it refuses any path outside iCloud Drive and the Dropbox folders (the two services verified in spike 1.2), resolves symlinks before checking, skips files already online-only, and exits 64 when refused and 2 when a file failed:
 
 | Subcommand | Output |
 |---|---|
 | `probe` | `signal=value` lines: `container_free_pct`, `container_free_gb`, `purgeable_gb`, `volume_used_gb_<role>` for Data, VM, System, Preboot, Recovery, `local_snapshots`, `swap_used_gb`, `probe_result` |
 | `sizes [MIN_GB]` | tab-separated rows: size in GB or `not-measured`, kind (prefixed `unsafe_` when the path holds a shell metacharacter or a control character), path (escaped with `printf %q` in that case), command, reason, origin (`shipped` or `local`), online-only GB for `cloud-sync` rows |
 | `candidates` | every valid candidate line, shipped then personal: origin, path, kind, command, reason; malformed lines reported on stderr |
+| `online-only PATH` | `online_only_done`, `online_only_failed`, `online_only_skipped` lines; the files are evicted by `evict.js` through `-[NSFileManager evictUbiquitousItemAtURL:error:]` |
 | `match [FILE]`, `list`, `show ID`, `validate` | as in `mac-timemachine-fix`; `match` exits 3 when nothing matches |
 
 **Data shapes.** `candidates.tsv`: four tab-separated fields (path with `~` and `*`, kind, command, reason); the command is the only command the skill may run for that row, and is empty for `personal`, `cloud-sync` and `system`; kinds are a closed list: `cache`, `download`, `build`, `personal`, `cloud-sync`, `system`. `problems.json`: the schema of `mac-timemachine-fix` (signals, never, problems with `match.all`, fixes with `class` direct/ask/user and `evidence` verified/reported/unverified).

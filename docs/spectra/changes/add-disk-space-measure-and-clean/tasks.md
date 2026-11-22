@@ -19,7 +19,7 @@
 
 ## 4. Skill
 
-- [ ] 4.1 Write `plugin/skills/disk-space/SKILL.md`: One row per candidate, Act only on rows the user names with `df -k` before and after, and the four closed tables Things the skill does directly, Things the skill asks first, Things left to the user, Things the skill never does; Clearing local snapshots belongs to this tool through a Terminal window. Verified by a content review against the skill spec, table by table, and by `claude plugin validate plugin`. [after: 1.1, 1.2, 2.2, 3.4]
+- [x] 4.1 Write `plugin/skills/disk-space/SKILL.md`: One row per candidate, Act only on rows the user names with `df -k` before and after, and the four closed tables Things the skill does directly, Things the skill asks first, Things left to the user, Things the skill never does; Clearing local snapshots belongs to this tool through a Terminal window. Verified by a content review against the skill spec, table by table, and by `claude plugin validate plugin`. [after: 1.1, 1.2, 2.2, 3.4]
 
 ## 5. Release
 

@@ -1,0 +1,8 @@
+#!/bin/bash
+# stub evict for tests: reads paths from stdin, one per line; records them in
+# $EVICT_LOG and prints "ok PATH", except paths containing "fails" ("fail PATH").
+while IFS= read -r p; do
+  [ -n "$p" ] || continue
+  printf '%s\n' "$p" >> "${EVICT_LOG:-/dev/null}"
+  case "$p" in *fails*) echo "fail $p" ;; *) echo "ok $p" ;; esac
+done

@@ -20,8 +20,14 @@
 #   disk-space.sh candidates         every valid candidate line, shipped and personal:
 #                                    origin, path, kind, command, reason (tab separated).
 #                                    A malformed line is reported on stderr and skipped
+#   disk-space.sh online-only PATH   make the downloaded files under PATH online-only.
+#                                    PATH must be inside iCloud Drive or a Dropbox folder,
+#                                    the two services verified on macOS 27.3. Prints
+#                                    online_only_done, online_only_failed and
+#                                    online_only_skipped. Exit 64: refused, 2: a file failed
 #
-# Every subcommand reads; none deletes a file, changes a setting or starts a backup.
+# Every subcommand except online-only only reads; none deletes a file, changes a
+# setting or starts a backup. online-only removes local copies whose cloud copy stays.
 # What the skill may change is decided in plugin/skills/disk-space/SKILL.md.
 #
 # Nothing here parses text that changes with the system language.
@@ -253,6 +259,66 @@ sizes() {
   done < "$TMPD/candidates"
 }
 
+# physical PATH: the path with every symlink resolved, or nothing
+physical() {
+  if [ -d "$1" ]; then (cd "$1" 2>/dev/null && pwd -P)
+  elif [ -f "$1" ] && [ ! -L "$1" ]; then
+    local d; d="$(cd "$(dirname "$1")" 2>/dev/null && pwd -P)" && printf '%s/%s\n' "$d" "$(basename "$1")"
+  fi
+}
+
+# The roots whose online-only mechanism was verified (spike 1.2). This list is closed.
+online_only_roots() {
+  physical "$HOME/Library/Mobile Documents/com~apple~CloudDocs"
+  local d
+  for d in "$HOME/Library/CloudStorage/Dropbox" "$HOME/Library/CloudStorage/Dropbox-"*; do
+    [ -d "$d" ] && physical "$d"
+  done
+}
+
+is_dataless() {
+  if [ -n "${DISK_SPACE_DATALESS_TEST:-}" ]; then
+    [ "$(basename "$1")" = "$DISK_SPACE_DATALESS_TEST" ]; return
+  fi
+  case "$(stat -f %Sf "$1" 2>/dev/null)" in *dataless*) return 0 ;; esac
+  return 1
+}
+
+online_only() {
+  local target real root inside="" f done=0 failed=0 skipped=0
+  target="${1:-}"
+  [ -n "$target" ] || { echo "usage: $0 online-only PATH" >&2; return 64; }
+  real="$(physical "$target")"
+  [ -n "$real" ] || { echo "online-only: not a folder or plain file: $target" >&2; return 64; }
+  while IFS= read -r root; do
+    [ -n "$root" ] || continue
+    case "$real/" in "$root/"*) inside=yes ;; esac
+  done <<EOF_ROOTS
+$(online_only_roots)
+EOF_ROOTS
+  [ -n "$inside" ] || { echo "online-only: refused, not inside iCloud Drive or Dropbox: $target" >&2; return 64; }
+  tmpdir
+  : > "$TMPD/evict-list"
+  while IFS= read -r -d '' f; do
+    case "$f" in *'
+'*) failed=$((failed + 1)); continue ;; esac
+    if is_dataless "$f"; then skipped=$((skipped + 1)); else printf '%s\n' "$f" >> "$TMPD/evict-list"; fi
+  done < <(find -x "$real" -type f -print0 2>/dev/null)
+  if [ -s "$TMPD/evict-list" ]; then
+    if [ -n "${DISK_SPACE_EVICT:-}" ]; then
+      "$DISK_SPACE_EVICT" < "$TMPD/evict-list" > "$TMPD/evict-out" 2>/dev/null
+    else
+      osascript -l JavaScript "$HERE/evict.js" < "$TMPD/evict-list" > "$TMPD/evict-out" 2>/dev/null
+    fi
+    done=$((done + $(grep -c '^ok ' "$TMPD/evict-out")))
+    failed=$((failed + $(grep -c '^fail ' "$TMPD/evict-out")))
+  fi
+  echo "online_only_done=$done"
+  echo "online_only_failed=$failed"
+  echo "online_only_skipped=$skipped"
+  [ "$failed" -eq 0 ] || return 2
+}
+
 probe() {
   local result=ok
   probe_container || result=partial
@@ -262,7 +328,7 @@ probe() {
   echo "probe_result=$result"
 }
 
-usage() { sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 64; }
+usage() { sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 64; }
 
 case "${1:-}" in
   probe) probe ;;
@@ -284,5 +350,6 @@ case "${1:-}" in
     exit $rc
     ;;
   candidates) candidates; exit 0 ;;
+  online-only) online_only "${2:-}"; exit $? ;;
   *) usage ;;
 esac
