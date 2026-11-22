@@ -21,6 +21,8 @@
 
 - [x] 4.1 Write `plugin/skills/disk-space/SKILL.md`: One row per candidate, Act only on rows the user names with `df -k` before and after, and the four closed tables Things the skill does directly, Things the skill asks first, Things left to the user, Things the skill never does; Clearing local snapshots belongs to this tool through a Terminal window. Verified by a content review against the skill spec, table by table, and by `claude plugin validate plugin`. [after: 1.1, 1.2, 2.2, 3.4]
 
+- [x] 4.2 `disk-space.sh online-only PATH`, written with task 4.1 and specified after verification: Online-only is confined to verified locations (iCloud Drive and Dropbox, after resolving symlinks; exit 64 otherwise), Only downloaded files are evicted (dataless files are skipped), and Unconfirmed files count as failed (a file `evict.js` did not report on is failed; exit 2). Verified by `tests/test_online_only.sh`. [after: 1.2]
+
 ## 5. Release
 
 - [x] 5.1 Run the skill once on a real Mac, record the run under `~/.config/mac-disk-space/records/`, and fill the verification tables of README.md and SKILL.md with what was measured and on which macOS version; bump `plugin/.claude-plugin/plugin.json` to 0.1.0 and update CHANGELOG.md and CLAUDE.md. Verified by `scripts/check-privacy.sh`, all tests, and CI on the pull request. [after: 4.1]

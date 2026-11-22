@@ -50,7 +50,7 @@ Clearing Time Machine local snapshots is often the only step that returns space 
 
 ### Spike before specifying snapshot reserve and online-only mechanisms
 
-Two facts are not yet measured: whether the space held by local snapshots can be known before deleting them, and which command makes files online-only for each sync service. Each gets a spike task; until a spike records a verified result, the probe reports `cannot-estimate` and the skill leaves online-only to the user in Finder.
+Two facts are not yet measured: whether the space held by local snapshots can be known before deleting them, and which command makes files online-only for each sync service. Each gets a spike task; until a spike records a verified result, the skill writes "cannot estimate" for the snapshot share on its table (the probe has no signal for it) and leaves online-only to the user in Finder.
 
 ## Implementation Contract
 
@@ -68,7 +68,7 @@ Two facts are not yet measured: whether the space held by local snapshots can be
 
 **Data shapes.** `candidates.tsv`: four tab-separated fields (path with `~` and `*`, kind, command, reason); the command is the only command the skill may run for that row, and is empty for `personal`, `cloud-sync` and `system`; kinds are a closed list: `cache`, `download`, `build`, `personal`, `cloud-sync`, `system`. `problems.json`: the schema of `mac-timemachine-fix` (signals, never, problems with `match.all`, fixes with `class` direct/ask/user and `evidence` verified/reported/unverified).
 
-**Failure modes.** A command that fails or times out yields no signal line or `not-measured`; an absent signal never matches a condition. A malformed personal file is reported and left out, never hiding the shipped entries.
+**Failure modes.** A command that fails or times out yields no signal line or `not-measured`; an absent signal never matches a condition. Time limits run external commands directly (never a shell function in a subshell), so stopping one stops the whole measurement. In `online-only`, a file that `evict.js` did not report on counts as failed. One temporary directory per run is created in the main shell and removed on exit. A malformed personal file is reported and left out, never hiding the shipped entries.
 
 **Acceptance.** Fixture tests for every subcommand; the privacy check passes; one run on a real Mac recorded in the README verification table with the macOS version; every number in docs labelled measured or estimated.
 
@@ -77,7 +77,7 @@ Two facts are not yet measured: whether the space held by local snapshots can be
 ## Risks / Trade-offs
 
 - [The user deletes something irreplaceable because the row looked safe] → every row states what deleting it loses; the skill never batches rows the user did not name; `personal` rows carry no cleaning command.
-- [Freeable estimates promise space that never returns] → estimates are labelled; APFS-cloned caches and snapshot-held data are reported as `cannot-estimate`; `df` is measured before and after.
+- [Freeable estimates promise space that never returns] → estimates are labelled; the skill writes "cannot estimate" for APFS-cloned caches and snapshot-held data; `df` is measured before and after.
 - [A slow location blocks the run] → per-location and per-run limits with `not-measured`.
 - [Process output leaks credentials] → the script never prints full command lines of other processes.
 - [Snapshot deletion needs a password] → Terminal window, password typed by the user, never through the conversation.
@@ -94,7 +94,7 @@ Tried, all read-only:
 | `diskutil apfs listSnapshots -plist /System/Volumes/Data` | per snapshot: name, UUID, XID, `Purgeable`, `LimitingContainerShrink`, `RevertTo`, `RootTo`; no size field |
 | `NSURLVolumeAvailableCapacityKey` vs `NSURLVolumeAvailableCapacityForImportantUsageKey` on `/` (read through JXA) | the first matched `df -k` available bytes; the second was larger by about 120 GB on the test Mac |
 
-Result: no source gives the space held by local snapshots alone. The difference between the two capacity keys is the space the system can reclaim from purgeable data, which includes local snapshots and other purgeable data; how much of it belongs to snapshots is not known (not measured: it would need deleting the snapshots and comparing). Until that is measured, the probe keeps reporting the snapshot share as `cannot-estimate`. Decided with the user (2026-11-22): the probe reports the purgeable total as `purgeable_gb`, labelled as including snapshots and other purgeable data, and the knowledge base gets a "purgeable data large" entry. The snapshot share alone stays `cannot-estimate`.
+Result: no source gives the space held by local snapshots alone. The difference between the two capacity keys is the space the system can reclaim from purgeable data, which includes local snapshots and other purgeable data; how much of it belongs to snapshots is not known (not measured: it would need deleting the snapshots and comparing). Until that is measured, the probe prints no signal for the snapshot share and the skill writes "cannot estimate" on its table. Decided with the user (2026-11-22): the probe reports the purgeable total as `purgeable_gb`, labelled as including snapshots and other purgeable data, and the knowledge base gets a "purgeable data large" entry. The snapshot share alone has no signal; the skill writes "cannot estimate" for it.
 
 ### Candidate rows carry their cleaning command
 

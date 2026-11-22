@@ -77,5 +77,40 @@ grep -q 'malformed' "$TMPD/err" && ok || bad "malformed personal line not report
 [ -n "$(row "$H/.cache/uv")" ] && ok || bad "shipped rows dropped by a malformed personal line"
 grep -q 'Terminated' "$TMPD/err" && bad "job-control noise on stderr" || ok
 
+# a row with an empty command keeps its fields: command empty, reason in field 5
+out="$(/bin/bash "$TOOL" sizes 0 2>/dev/null)"
+[ -z "$(row "$H/cloud" | cut -f4)" ] && ok || bad "empty command shifted: field 4 is '$(row "$H/cloud" | cut -f4)'"
+[ "$(row "$H/cloud" | cut -f5)" = "synced folder" ] && ok || bad "reason lost: field 5 is '$(row "$H/cloud" | cut -f5)'"
+[ "$(row "$H/cloud" | cut -f6)" = shipped ] && ok || bad "origin shifted: field 6 is '$(row "$H/cloud" | cut -f6)'"
+[ "$(row "$H/.cache/uv" | cut -f5)" = "uv cache" ] && ok || bad "reason of a row with a command: '$(row "$H/.cache/uv" | cut -f5)'"
+
+# du fails (permission denied) -> not-measured, never the partial number
+mkdir -p "$H/denied"
+printf '~/denied\tpersonal\t\tunreadable\n' > "$TMPD/c_denied.tsv"
+out="$(DISK_SPACE_CANDIDATES="$TMPD/c_denied.tsv" /bin/bash "$TOOL" sizes 0 2>/dev/null)"
+[ "$(row "$H/denied" | cut -f1)" = not-measured ] && ok || bad "a failed du was reported as a size: $(row "$H/denied")"
+
+# a cloud-sync location shares one budget between du and the online-only scan, and the
+# stopped scan leaves no process behind
+mkdir -p "$H/lagcloud"; echo $((6 * GiB_KB)) > "$H/lagcloud/.size"
+printf '~/lagcloud\tcloud-sync\t\tsynced\n' > "$TMPD/c_cloud.tsv"
+s0=$SECONDS
+out="$(DISK_SPACE_CANDIDATES="$TMPD/c_cloud.tsv" DISK_SPACE_LOCATION_LIMIT=2 /bin/bash "$TOOL" sizes 0 2>/dev/null)"
+took=$((SECONDS - s0))
+[ "$(row "$H/lagcloud" | cut -f7)" = not-measured ] && ok || bad "slow online-only scan: $(row "$H/lagcloud")"
+[ "$took" -le 5 ] && ok || bad "one cloud location took ${took}s with a 2 s limit"
+sleep 1
+# match the exact command line: pgrep -f would also match any shell whose command text
+# merely mentions it
+ps -ax -o command= | grep -qx 'sleep 31' && bad "the stopped online-only scan is still running" || ok
+
+# fast locations do not each cost a whole polling second
+mkdir -p "$H/f1" "$H/f2" "$H/f3" "$H/f4" "$H/f5" "$H/f6"
+: > "$TMPD/c_fast.tsv"; for i in 1 2 3 4 5 6; do printf '~/f%s\tcache\t\tfast %s\n' "$i" "$i" >> "$TMPD/c_fast.tsv"; done
+s0=$SECONDS
+DISK_SPACE_CANDIDATES="$TMPD/c_fast.tsv" /bin/bash "$TOOL" sizes 0 >/dev/null 2>&1
+took=$((SECONDS - s0))
+[ "$took" -le 3 ] && ok || bad "six instant locations took ${took}s"
+
 echo "test_sizes: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

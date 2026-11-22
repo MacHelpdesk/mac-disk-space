@@ -14,7 +14,9 @@
 ~/Library/Developer/CoreSimulator	build	xcrun simctl delete unavailable	iOS 模擬器；指令只刪除已不受目前 Xcode 支援的模擬器
 ~/Library/Developer/Xcode/iOS DeviceSupport	build		Xcode 連接實機時下載的除錯符號；再接上裝置時會重新下載
 ~/Library/Containers/com.docker.docker	personal		Docker 的映像、容器與 volume；volume 裡可能有資料庫
-~/Library/CloudStorage	cloud-sync		Dropbox、OneDrive、Google Drive 的同步資料夾；本機刪除會同步刪除雲端，只能改成僅線上
+~/Library/CloudStorage/Dropbox*	cloud-sync		Dropbox 的同步資料夾；本機刪除會同步刪除雲端，只能改成僅線上（disk-space.sh online-only 可以做）
+~/Library/CloudStorage/OneDrive*	cloud-sync		OneDrive 的同步資料夾；本機刪除會同步刪除雲端，只能在 Finder 改成僅線上
+~/Library/CloudStorage/GoogleDrive*	cloud-sync		Google Drive 的同步資料夾；本機刪除會同步刪除雲端，只能在 Finder 改成僅線上
 ~/Library/Mobile Documents/com~apple~CloudDocs	cloud-sync		iCloud 雲碟；本機刪除會同步刪除雲端，只能改成僅線上
 ~/Parallels	personal		Parallels 虛擬機；整個虛擬磁碟是一個檔案，刪除就失去虛擬機
 ~/Virtual Machines.localized	personal		VMware 虛擬機

@@ -47,7 +47,10 @@ LOCAL_CANDIDATES="${DISK_SPACE_LOCAL_CANDIDATES:-$HOME/.config/mac-disk-space/ca
 TMPD=""
 cleanup() { [ -n "$TMPD" ] && rm -rf "$TMPD"; }
 trap cleanup EXIT
-tmpdir() { [ -n "$TMPD" ] || TMPD="$(mktemp -d)"; }
+# One temporary directory per run, created in the main shell before any subcommand runs:
+# a directory created inside $(...) or a pipeline would live only in that subshell and
+# the EXIT trap would never see it. An explicit template makes mktemp honour TMPDIR.
+tmpdir() { [ -n "$TMPD" ] || TMPD="$(mktemp -d "${TMPDIR:-/tmp}/disk-space.XXXXXX")"; }
 
 kb() { osascript -l JavaScript "$KBJS" "$@"; }
 
@@ -181,33 +184,38 @@ probe_swap() {
 LOCATION_LIMIT="${DISK_SPACE_LOCATION_LIMIT:-60}"
 RUN_LIMIT="${DISK_SPACE_RUN_LIMIT:-300}"
 
-# run_limited SECONDS OUTFILE CMD...: run CMD in the background, writing OUTFILE; stop
-# it after SECONDS. Returns 0 when it finished in time, 1 when it was stopped. Bash 3.2
-# and macOS have no timeout(1), so this polls once a second.
+# run_limited SECONDS OUTFILE CMD...: run the external command CMD in the background,
+# writing OUTFILE, and stop it after SECONDS. Returns 0 when it finished in time with
+# exit status 0, 1 when it was stopped, 2 when it finished with another status (du
+# that could not read part of a folder). CMD must be an external command, not a shell
+# function: a function runs in a subshell, and stopping the subshell would leave its
+# children running. Bash 3.2 and macOS have no timeout(1), so this polls: every 0.1 s
+# for the first second, then every second.
 run_limited() {
-  local limit="$1" out="$2" pid waited=0; shift 2
+  local limit="$1" out="$2" pid tenths=0 status; shift 2
   "$@" > "$out" 2>/dev/null &
   pid=$!
   while kill -0 "$pid" 2>/dev/null; do
-    if [ "$waited" -ge "$limit" ]; then
+    if [ "$tenths" -ge $((limit * 10)) ]; then
       kill "$pid" 2>/dev/null
-      sleep 2
+      local w=0
+      while kill -0 "$pid" 2>/dev/null && [ "$w" -lt 20 ]; do sleep 0.1; w=$((w + 1)); done
       kill -9 "$pid" 2>/dev/null
       wait "$pid" 2>/dev/null
       return 1
     fi
-    sleep 1
-    waited=$((waited + 1))
+    if [ "$tenths" -lt 10 ]; then sleep 0.1; tenths=$((tenths + 1))
+    else sleep 1; tenths=$((tenths + 10)); fi
   done
-  wait "$pid" 2>/dev/null
-  return 0
+  wait "$pid"
+  status=$?
+  [ "$status" -eq 0 ] && return 0
+  return 2
 }
 
 # Online-only files have the dataless flag; their size is never used to decide that.
-dataless_bytes() {
-  find -x "$1" -type f -flags +dataless -print0 2>/dev/null | xargs -0 stat -f %z 2>/dev/null
-  return 0
-}
+# One find process prints the byte size of each, so stopping it stops the scan.
+DATALESS_CMD="find -x"
 
 # emit_row SIZE KIND PATH COMMAND REASON ORIGIN ONLINE_ONLY
 emit_row() {
@@ -221,38 +229,45 @@ emit_row() {
 
 sizes() {
   local min="${1:-1}" started="$SECONDS" origin pattern kind command reason p left
-  local kb gb online oldifs du="${DISK_SPACE_DU:-du}"
-  local dl="${DISK_SPACE_DATALESS:-}"
-  tmpdir
+  local kb gb online oldifs du="${DISK_SPACE_DU:-du}" dl="${DISK_SPACE_DATALESS:-}" n=0 t0
   candidates > "$TMPD/candidates"
   oldifs="$IFS"
-  while IFS='	' read -r origin pattern kind command reason; do
+  local line TAB='	'
+  # Split on single tabs by hand: read with IFS set to a tab merges consecutive tabs,
+  # which would move the reason into the empty command field.
+  while IFS= read -r line; do
+    origin="${line%%"$TAB"*}"; line="${line#*"$TAB"}"
+    pattern="${line%%"$TAB"*}"; line="${line#*"$TAB"}"
+    kind="${line%%"$TAB"*}"; line="${line#*"$TAB"}"
+    command="${line%%"$TAB"*}"; reason="${line#*"$TAB"}"
     case "$pattern" in '~'*) pattern="$HOME${pattern#\~}" ;; esac
     IFS='
 '
     for p in $pattern; do
       IFS="$oldifs"
       [ -e "$p" ] || continue
-      online=""
+      n=$((n + 1)); online=""; t0=$SECONDS
+      # one budget per location, shared by du and the online-only scan
       left=$((RUN_LIMIT - (SECONDS - started)))
       [ "$left" -gt "$LOCATION_LIMIT" ] && left="$LOCATION_LIMIT"
-      if [ "$left" -le 0 ] || ! run_limited "$left" "$TMPD/du" "$du" -sxk "$p" 2>/dev/null; then
+      if [ "$left" -le 0 ] || ! run_limited "$left" "$TMPD/du.$n" "$du" -sxk "$p" 2>/dev/null; then
         emit_row not-measured "$kind" "$p" "$command" "$reason" "$origin" ""
         continue
       fi
-      kb="$(tail -1 "$TMPD/du" | cut -f1)"
+      kb="$(tail -1 "$TMPD/du.$n" | cut -f1)"
       case "$kb" in ''|*[!0-9]*) emit_row not-measured "$kind" "$p" "$command" "$reason" "$origin" ""; continue ;; esac
       gb=$(( kb * 1024 / GB ))
+      [ "$gb" -ge "$min" ] || continue
       if [ "$kind" = cloud-sync ]; then
-        left=$((RUN_LIMIT - (SECONDS - started)))
-        [ "$left" -gt "$LOCATION_LIMIT" ] && left="$LOCATION_LIMIT"
-        if [ "$left" -gt 0 ] && if [ -n "$dl" ]; then run_limited "$left" "$TMPD/dl" "$dl" "$p" 2>/dev/null; else run_limited "$left" "$TMPD/dl" dataless_bytes "$p" 2>/dev/null; fi; then
-          online="$(awk -v g="$GB" '{ s += $1 } END { printf "%d\n", s / g }' "$TMPD/dl")"
+        left=$((LOCATION_LIMIT - (SECONDS - t0)))
+        [ "$left" -gt $((RUN_LIMIT - (SECONDS - started))) ] && left=$((RUN_LIMIT - (SECONDS - started)))
+        if [ "$left" -gt 0 ] && { if [ -n "$dl" ]; then run_limited "$left" "$TMPD/dl.$n" "$dl" "$p" 2>/dev/null
+             else run_limited "$left" "$TMPD/dl.$n" $DATALESS_CMD "$p" -type f -flags +dataless -exec stat -f %z {} + 2>/dev/null; fi; }; then
+          online="$(awk -v g="$GB" '{ s += $1 } END { printf "%d\n", s / g }' "$TMPD/dl.$n")"
         else
           online="not-measured"
         fi
       fi
-      [ "$gb" -ge "$min" ] || continue
       emit_row "$gb" "$kind" "$p" "$command" "$reason" "$origin" "$online"
     done
     IFS="$oldifs"
@@ -305,13 +320,21 @@ EOF_ROOTS
     if is_dataless "$f"; then skipped=$((skipped + 1)); else printf '%s\n' "$f" >> "$TMPD/evict-list"; fi
   done < <(find -x "$real" -type f -print0 2>/dev/null)
   if [ -s "$TMPD/evict-list" ]; then
+    local listed reported ok_n fail_n
     if [ -n "${DISK_SPACE_EVICT:-}" ]; then
       "$DISK_SPACE_EVICT" < "$TMPD/evict-list" > "$TMPD/evict-out" 2>/dev/null
     else
       osascript -l JavaScript "$HERE/evict.js" < "$TMPD/evict-list" > "$TMPD/evict-out" 2>/dev/null
     fi
-    done=$((done + $(grep -c '^ok ' "$TMPD/evict-out")))
-    failed=$((failed + $(grep -c '^fail ' "$TMPD/evict-out")))
+    # A file evict.js did not report on (it crashed, was stopped, or was refused by the
+    # system) counts as failed: "done" is only what it confirmed.
+    listed=$(grep -c . "$TMPD/evict-list")
+    ok_n=$(grep -c '^ok ' "$TMPD/evict-out")
+    fail_n=$(grep -c '^fail ' "$TMPD/evict-out")
+    reported=$((ok_n + fail_n))
+    done=$((done + ok_n))
+    failed=$((failed + fail_n))
+    [ "$reported" -lt "$listed" ] && failed=$((failed + listed - reported))
   fi
   echo "online_only_done=$done"
   echo "online_only_failed=$failed"
@@ -330,6 +353,7 @@ probe() {
 
 usage() { sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 64; }
 
+tmpdir
 case "${1:-}" in
   probe) probe ;;
   sizes) sizes "${2:-1}" | sort -t '	' -k1,1nr ;;

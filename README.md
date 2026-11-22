@@ -4,7 +4,7 @@
 
 與 [`mac-dropbox-fix`](https://github.com/MacHelpdesk/mac-dropbox-fix)、[`mac-timemachine-fix`](https://github.com/MacHelpdesk/mac-timemachine-fix) 同一個系列：先量測，再判讀，最後才動手。
 
-> **狀態：v0.1.0。** `probe` 與 `sizes` 在 macOS 27.3 上實跑過一次；`online-only` 的機制在 iCloud 雲碟與 Dropbox 各實測一個測試檔。知識庫每一筆都是 `unverified`，候選清單裡的清理指令沒有由這個 skill 在實機上執行過。見〈驗證到哪裡〉。
+> **狀態：v0.2.0。** `probe` 與 `sizes` 在 macOS 27.3 上實跑過一次；`online-only` 的機制在 iCloud 雲碟與 Dropbox 各實測一個測試檔。知識庫每一筆都是 `unverified`，候選清單裡的清理指令沒有由這個 skill 在實機上執行過。見〈驗證到哪裡〉。
 
 ## 它解決什麼
 
@@ -21,11 +21,12 @@
 
 範圍是封閉的：Mac 內建磁碟的空間。外接碟、網路磁碟、備份碟都不處理（時光機的問題見 `mac-timemachine-fix`）。
 
-## 四個部分
+## 五個部分
 
 | 部分 | 位置 | 做什麼 |
 |---|---|---|
-| skill | `/mac-disk-space:disk-space` | 量測 → 對照知識庫 → 量候選位置 → 逐項判定表 → 只做你點名的列，前後各量一次 `df` → 寫紀錄 |
+| skill | `/mac-disk-space:disk-space` | 派 agent 量測 → 核對列數 → 逐項判定表 → 只做你點名的列，前後各量一次 `df` → 寫紀錄 |
+| agent | `mac-disk-space:disk-space-measure` | 由 skill 派出，跑唯讀的量測指令、對照知識庫，交回逐項的報告。不清理、不寫檔；不是給你直接呼叫的入口 |
 | 知識庫 | `plugin/data/problems.json` | 每種情況的症狀、訊號、原因、解法、驗證到哪裡，以及任何情況都不做的事 |
 | 候選清單 | `plugin/data/candidates.tsv` | 要量的位置，四欄：路徑、種類、清理指令、理由。`personal`、`cloud-sync`、`system` 沒有指令 |
 | 腳本 | `plugin/scripts/disk-space.sh` | 量測、比對；`online-only` 是唯一會改動東西的子命令 |
@@ -79,6 +80,7 @@ probe_result=ok
 | `online-only` 的機制（`evictUbiquitousItemAtURL`） | iCloud 雲碟、Dropbox 各實測一個測試檔：1 秒內變成僅線上，再讀一次內容完整。子命令本身只在 `tests/test_online_only.sh` 驗過 |
 | 刪除本機快照後可用空間回升 | 手動做過一次（不是由這個 skill 執行）：刪完後幾分鐘內持續增加 |
 | 候選清單裡的清理指令、OneDrive 與 Google Drive 的僅線上 | 未驗證 |
+| `disk-space-measure` agent（由 skill 派出量測與判讀） | 未驗證：四項裡缺一項。實跑兩次（macOS 27.3，Claude Code 2.1.330，2026-11-23，無頭模式）。(1) 列數：`sizes` 印出 58 列，交回的表 58 列，其中 4 列 `not-measured`，相符。(2) 指令：修正後那一次 agent 跑了 8 個指令，全部在清單內、一次一個；修正前那一次腳本回 `permission denied`，agent 接著跑了清單外的 `ls` 與 `head`，所以唯讀界線靠工具清單（只有 Bash 與 Read）與定義檔裡的封閉列舉，平台不會強制。(3) 權限提示：**沒有量到**。無頭模式不能回答提示，那一次是事先允許了這些指令；一般互動 session 會跳幾次還不知道。(4) 版本如上。另外量到：整次約 5 分 40 秒，agent 用了約 9 萬 token |
 | 其他 macOS 版本 | 未驗證。讀不到的訊號不會出現，也不會被當成比對到 |
 
 ## 開發

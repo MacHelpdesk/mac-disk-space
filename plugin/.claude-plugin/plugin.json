@@ -1,6 +1,6 @@
 {
   "name": "mac-disk-space",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Mac 內建磁碟快滿時，量出空間去哪了（APFS 容器各卷、時光機本機快照、可清除量、記憶體交換檔、常見的快取與下載位置），對照已知情況，把每個位置列成一列讓使用者逐項判定，只做使用者點名的那幾列。能不能重建逐項判定；雲端同步資料夾只能改成僅線上，不刪除。",
   "author": {
     "name": "Che Cheng"
@@ -14,6 +14,7 @@
     "swap",
     "cache",
     "storage",
+    "subagent",
     "troubleshooting"
   ]
 }

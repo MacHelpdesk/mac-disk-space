@@ -1,12 +1,14 @@
+# disk-space-probe Specification
+
 ## Purpose
 
 Read-only measurement of where the space of a Mac's internal disk went: APFS container volumes, Time Machine local snapshots, swap, free space and a list of candidate locations. It exists because `du` and `df /` alone mislead when APFS clones, local snapshots or the swap volume hold the space.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Probe reports container-level signals
 
-`disk-space.sh probe` SHALL print one `signal=value` line per measured signal: `container_free_pct`, `container_free_gb`, `purgeable_gb`, `volume_used_gb_<role>` for each APFS volume role found in the container of the boot volume, `local_snapshots`, `swap_used_gb`, and `probe_result`. Sizes SHALL be whole gigabytes (1 GB = 10^9 bytes, as `diskutil` reports), rounded down; percentages SHALL be whole percent, rounded down. Values SHALL come from property lists (`diskutil apfs list -plist`), `df -k`, the volume capacity keys `NSURLVolumeAvailableCapacityKey` and `NSURLVolumeAvailableCapacityForImportantUsageKey` of `/` (`purgeable_gb` is the second minus the first: space the system can reclaim from purgeable data, including local snapshots and other purgeable data, not snapshots alone), `tmutil listlocalsnapshotdates /` and `sysctl -n vm.swapusage`, never from text that changes with the system language. The probe SHALL NOT change any setting, delete any file, or start a backup.
+`disk-space.sh probe` SHALL print one `signal=value` line per measured signal: `container_free_pct`, `container_free_gb`, `purgeable_gb`, `volume_used_gb_<role>` for the roles `Data`, `VM`, `System`, `Preboot` and `Recovery` found in the container of the boot volume (a closed list; other roles are not reported), `local_snapshots`, `swap_used_gb`, and `probe_result`. Sizes SHALL be whole gigabytes (1 GB = 10^9 bytes, as `diskutil` reports), rounded down; percentages SHALL be whole percent, rounded down. Values SHALL come from property lists (`diskutil apfs list -plist`), `df -k`, the volume capacity keys `NSURLVolumeAvailableCapacityKey` and `NSURLVolumeAvailableCapacityForImportantUsageKey` of `/` (`purgeable_gb` is the second minus the first: space the system can reclaim from purgeable data, including local snapshots and other purgeable data, not snapshots alone), `tmutil listlocalsnapshotdates /` and `sysctl -n vm.swapusage`, never from text that changes with the system language. The probe SHALL NOT change any setting, delete any file, or start a backup.
 
 #### Scenario: All sources readable
 
@@ -24,9 +26,20 @@ Read-only measurement of where the space of a Mac's internal disk went: APFS con
 - **WHEN** one source fails or returns nothing parseable
 - **THEN** the probe omits the signals of that source, prints the remaining signals, and prints `probe_result=partial`
 
+---
 ### Requirement: Candidate sizes have time limits
 
-`disk-space.sh sizes [MIN_GB]` SHALL measure each location in the shipped `candidates.tsv` and in `~/.config/mac-disk-space/candidates.local.tsv`, expanding `~` and `*` patterns. Each location SHALL get at most 60 seconds and a run at most 300 seconds. A location whose measurement does not finish SHALL be printed with the size `not-measured` and SHALL NOT be counted in any total. The command SHALL NOT scan locations that are not listed.
+`disk-space.sh sizes [MIN_GB]` SHALL measure each location in the shipped `candidates.tsv` and in `~/.config/mac-disk-space/candidates.local.tsv`, expanding `~` and `*` patterns. Each location SHALL get at most 60 seconds and a run at most 300 seconds. The 60 seconds of a location cover every measurement of that location, including the online-only scan of a `cloud-sync` location. A location whose measurement does not finish, or whose measuring command exits with a non-zero status (for example a folder it cannot fully read), SHALL be printed with the size `not-measured` and SHALL NOT be counted in any total. A stopped measurement SHALL leave no process running. The command SHALL NOT scan locations that are not listed.
+
+#### Scenario: A folder that cannot be fully read
+
+- **WHEN** `du` prints a total for a location but exits with a non-zero status
+- **THEN** that row shows `not-measured`, not the partial total
+
+#### Scenario: A cloud-synced location with a slow online-only scan
+
+- **WHEN** the online-only scan of a `cloud-sync` location runs past what is left of that location's limit
+- **THEN** its online-only share is `not-measured`, the location used no more than its limit, and the scan process is no longer running
 
 #### Scenario: A slow location
 
@@ -41,6 +54,7 @@ Read-only measurement of where the space of a Mac's internal disk went: APFS con
 | still running at 60 s | `not-measured` |
 | run reached 300 s before this location started | `not-measured` |
 
+---
 ### Requirement: Cloud-synced locations report local footprint only
 
 For locations of kind `cloud-sync`, `sizes` SHALL report the space the files occupy on this Mac and how much of it is already online-only, judged by the `dataless` file flag and never by file size. It SHALL NOT report such a location as freeable by deletion.
@@ -50,15 +64,17 @@ For locations of kind `cloud-sync`, `sizes` SHALL report the space the files occ
 - **WHEN** a `cloud-sync` location holds 10 GB of downloaded files and 50 GB of online-only placeholders
 - **THEN** its row reports 10 GB on this Mac and marks the placeholders as already online-only
 
+---
 ### Requirement: Unsafe paths are escaped
 
-`sizes` SHALL print a path holding a shell metacharacter or a control character with `printf %q` and its kind prefixed with `unsafe_`, and SHALL look the location up by its raw path before escaping.
+`sizes` SHALL print a path holding any of the characters $ ` ; | & < > \ " ' ! * ? [ ] ( ) { } or a control character with `printf %q` and its kind prefixed with `unsafe_`, and SHALL look the location up by its raw path before escaping. A space or a tab alone SHALL NOT make a path unsafe. This list of characters is closed.
 
 #### Scenario: A folder name with a command substitution
 
 - **WHEN** a matched folder is named `$(x) Library`
 - **THEN** its row carries the kind `unsafe_<kind>` and the escaped path, and no other row is marked unsafe
 
+---
 ### Requirement: Other processes' command lines are never printed
 
 No subcommand SHALL print the full command line of another process. When a signal needs process information, it SHALL use the process name only.

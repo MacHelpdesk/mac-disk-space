@@ -16,3 +16,4 @@ problems.local.json
 
 # IDD per-machine config
 .claude/.idd/
+docs/spectra/.vector-search.db*
