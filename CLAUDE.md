@@ -35,7 +35,7 @@ MacHelpdesk 系列的磁碟空間工具。整個系列共用的規則（公開 r
 
 ## 狀態
 
-0.2.0。需求與決定在 MacHelpdesk/mac-helpdesk#9 與 MacHelpdesk/mac-disk-space#3，主規格在 `docs/spectra/specs/`。每週背景量測與通知（#9 的決定 6–8）是之後另一個 change，會重用 `disk-space.sh probe`。
+0.2.1。需求與決定在 MacHelpdesk/mac-helpdesk#9 與 MacHelpdesk/mac-disk-space#3，主規格在 `docs/spectra/specs/`。每週背景量測與通知（#9 的決定 6–8）是之後另一個 change，會重用 `disk-space.sh probe`。
 
 ## 這個工具特有的
 

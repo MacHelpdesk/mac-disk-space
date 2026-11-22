@@ -22,7 +22,7 @@ tools: Bash, Read
 | 1 | `disk-space.sh probe` | 容器各卷、可清除量、本機快照、swap、剩餘空間 |
 | 2 | `disk-space.sh match` | 對照知識庫；結束碼 3 是沒有比對到，不是錯誤 |
 | 3 | `disk-space.sh show <id>` | 對 `match` 印出的每個 id 各跑一次 |
-| 4 | `disk-space.sh sizes 5` | 量候選位置；最多 5 分鐘，等它跑完，不要中途結束它 |
+| 4 | `disk-space.sh sizes 5` | 量候選位置；最多 5 分鐘，等它跑完，不要中途結束它。Bash 工具預設 2 分鐘就會結束指令，這個指令的逾時設成 330000 毫秒 |
 | 5 | `df -k /` | 剩餘空間 |
 
 每個指令各跑一次（`show` 是每個 id 一次）。
