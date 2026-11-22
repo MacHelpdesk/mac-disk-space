@@ -24,7 +24,7 @@ A condition on a signal the probe did not print, or whose value is `unknown`, SH
 
 ### Requirement: Initial entries
 
-The shipped knowledge base SHALL contain at least these entries, each with evidence `unverified` until a real-Mac run verifies its fix: container nearly full (free below 10% or 50 GB), local snapshots holding deleted data, swap volume large, cache shares blocks with other files so deleting frees less than measured.
+The shipped knowledge base SHALL contain at least these entries, each with evidence `unverified` until a real-Mac run verifies its fix: container nearly full (free below 10% or 50 GB), local snapshots holding deleted data, purgeable data large (`purgeable_gb` at least 20), swap volume large, cache shares blocks with other files so deleting frees less than measured.
 
 #### Scenario: Nearly full container
 
@@ -41,7 +41,12 @@ The shipped knowledge base SHALL contain at least these entries, each with evide
 
 ### Requirement: Candidate list kinds
 
-`plugin/data/candidates.tsv` SHALL have three tab-separated fields per line (path, kind, reason) and its kind SHALL be one of `cache`, `download`, `build`, `personal`, `cloud-sync`, `system`. No kind SHALL authorize deleting a location without the user's decision. Lines of `~/.config/mac-disk-space/candidates.local.tsv` SHALL follow the same format; a malformed personal line SHALL be reported and skipped.
+`plugin/data/candidates.tsv` SHALL have four tab-separated fields per line (path, kind, command, reason) and its kind SHALL be one of `cache`, `download`, `build`, `personal`, `cloud-sync`, `system`. The command field SHALL be empty for the kinds `personal`, `cloud-sync` and `system`; for the other kinds it holds the location's own cleaning command or is empty. `disk-space.sh validate` SHALL reject a line whose command is not empty for those three kinds. No kind SHALL authorize deleting a location without the user's decision. Lines of `~/.config/mac-disk-space/candidates.local.tsv` SHALL follow the same format; a malformed personal line SHALL be reported and skipped.
+
+#### Scenario: A cloud-sync line with a command
+
+- **WHEN** a candidate line of kind `cloud-sync` has a non-empty command
+- **THEN** `validate` reports the line and exits non-zero
 
 #### Scenario: A personal line with an unknown kind
 

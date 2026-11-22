@@ -60,11 +60,11 @@ Two facts are not yet measured: whether the space held by local snapshots can be
 
 | Subcommand | Output |
 |---|---|
-| `probe` | `signal=value` lines: `container_free_pct`, `container_free_gb`, `volume_used_gb_<role>` for Data, VM, System, Preboot, Recovery, `local_snapshots`, `swap_used_gb`, `probe_result` |
+| `probe` | `signal=value` lines: `container_free_pct`, `container_free_gb`, `purgeable_gb`, `volume_used_gb_<role>` for Data, VM, System, Preboot, Recovery, `local_snapshots`, `swap_used_gb`, `probe_result` |
 | `sizes [MIN_GB]` | tab-separated rows: size in GB or `not-measured`, kind, path (escaped and marked `unsafe_` when it holds a shell metacharacter or a control character), reason |
 | `match [FILE]`, `list`, `show ID`, `validate` | as in `mac-timemachine-fix`; `match` exits 3 when nothing matches |
 
-**Data shapes.** `candidates.tsv`: three tab-separated fields (path with `~` and `*`, kind, reason); kinds are a closed list: `cache`, `download`, `build`, `personal`, `cloud-sync`, `system`. `problems.json`: the schema of `mac-timemachine-fix` (signals, never, problems with `match.all`, fixes with `class` direct/ask/user and `evidence` verified/reported/unverified).
+**Data shapes.** `candidates.tsv`: four tab-separated fields (path with `~` and `*`, kind, command, reason); the command is the only command the skill may run for that row, and is empty for `personal`, `cloud-sync` and `system`; kinds are a closed list: `cache`, `download`, `build`, `personal`, `cloud-sync`, `system`. `problems.json`: the schema of `mac-timemachine-fix` (signals, never, problems with `match.all`, fixes with `class` direct/ask/user and `evidence` verified/reported/unverified).
 
 **Failure modes.** A command that fails or times out yields no signal line or `not-measured`; an absent signal never matches a condition. A malformed personal file is reported and left out, never hiding the shipped entries.
 
@@ -79,3 +79,21 @@ Two facts are not yet measured: whether the space held by local snapshots can be
 - [A slow location blocks the run] → per-location and per-run limits with `not-measured`.
 - [Process output leaks credentials] → the script never prints full command lines of other processes.
 - [Snapshot deletion needs a password] → Terminal window, password typed by the user, never through the conversation.
+
+## Open Questions
+
+### Spike 1.1: can the space held by local snapshots be read before deleting them? (macOS 27.3, 2026-11-22)
+
+Tried, all read-only:
+
+| Source | Result |
+|---|---|
+| `tmutil listlocalsnapshotdates /` | snapshot dates only |
+| `diskutil apfs listSnapshots -plist /System/Volumes/Data` | per snapshot: name, UUID, XID, `Purgeable`, `LimitingContainerShrink`, `RevertTo`, `RootTo`; no size field |
+| `NSURLVolumeAvailableCapacityKey` vs `NSURLVolumeAvailableCapacityForImportantUsageKey` on `/` (read through JXA) | the first matched `df -k` available bytes; the second was larger by about 120 GB on the test Mac |
+
+Result: no source gives the space held by local snapshots alone. The difference between the two capacity keys is the space the system can reclaim from purgeable data, which includes local snapshots and other purgeable data; how much of it belongs to snapshots is not known (not measured: it would need deleting the snapshots and comparing). Until that is measured, the probe keeps reporting the snapshot share as `cannot-estimate`. Decided with the user (2026-11-22): the probe reports the purgeable total as `purgeable_gb`, labelled as including snapshots and other purgeable data, and the knowledge base gets a "purgeable data large" entry. The snapshot share alone stays `cannot-estimate`.
+
+### Candidate rows carry their cleaning command
+
+Decided 2026-11-22. The skill spec says the skill runs "the cleaning command listed for a candidate", but the candidate list had no field for it. Decided with the user: a fourth field `command`, empty for `personal`, `cloud-sync` and `system`, so that the skill runs only a command written in the list and never composes one.

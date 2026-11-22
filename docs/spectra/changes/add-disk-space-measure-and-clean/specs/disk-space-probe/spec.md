@@ -6,7 +6,7 @@ Read-only measurement of where the space of a Mac's internal disk went: APFS con
 
 ### Requirement: Probe reports container-level signals
 
-`disk-space.sh probe` SHALL print one `signal=value` line per measured signal: `container_free_pct`, `container_free_gb`, `volume_used_gb_<role>` for each APFS volume role found in the container of the boot volume, `local_snapshots`, `swap_used_gb`, and `probe_result`. Sizes SHALL be whole gigabytes (1 GB = 10^9 bytes, as `diskutil` reports), rounded down; percentages SHALL be whole percent, rounded down. Values SHALL come from property lists (`diskutil apfs list -plist`), `df -k`, `tmutil listlocalsnapshotdates /` and `sysctl -n vm.swapusage`, never from text that changes with the system language. The probe SHALL NOT change any setting, delete any file, or start a backup.
+`disk-space.sh probe` SHALL print one `signal=value` line per measured signal: `container_free_pct`, `container_free_gb`, `purgeable_gb`, `volume_used_gb_<role>` for each APFS volume role found in the container of the boot volume, `local_snapshots`, `swap_used_gb`, and `probe_result`. Sizes SHALL be whole gigabytes (1 GB = 10^9 bytes, as `diskutil` reports), rounded down; percentages SHALL be whole percent, rounded down. Values SHALL come from property lists (`diskutil apfs list -plist`), `df -k`, the volume capacity keys `NSURLVolumeAvailableCapacityKey` and `NSURLVolumeAvailableCapacityForImportantUsageKey` of `/` (`purgeable_gb` is the second minus the first: space the system can reclaim from purgeable data, including local snapshots and other purgeable data, not snapshots alone), `tmutil listlocalsnapshotdates /` and `sysctl -n vm.swapusage`, never from text that changes with the system language. The probe SHALL NOT change any setting, delete any file, or start a backup.
 
 #### Scenario: All sources readable
 
@@ -17,7 +17,7 @@ Read-only measurement of where the space of a Mac's internal disk went: APFS con
 
 - **GIVEN** a fixture container of 1000 GB with Data 900 GB, VM 40 GB, System 15 GB, 2 local snapshots and 38.5 GB of swap used
 - **WHEN** `disk-space.sh probe` runs against the fixtures
-- **THEN** it prints `volume_used_gb_Data=900`, `volume_used_gb_VM=40`, `local_snapshots=2`, `swap_used_gb=38` and `container_free_pct` computed from the container's free capacity
+- **THEN** it prints `volume_used_gb_Data=900`, `purgeable_gb` from the two capacity keys, `volume_used_gb_VM=40`, `local_snapshots=2`, `swap_used_gb=38` and `container_free_pct` computed from the container's free capacity
 
 #### Scenario: A source cannot be read
 
