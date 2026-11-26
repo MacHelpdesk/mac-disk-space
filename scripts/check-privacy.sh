@@ -10,6 +10,10 @@
 #   2. an absolute home path (/Users/<name>/ or /home/<name>/); /Users/Shared/ is the
 #      system's shared folder, not anyone's home, and is allowed
 #   3. a UUID other than 00000000-0000-0000-0000-000000000000
+#   4. an email address, except at the RFC 2606 example domains (example.com, example.org,
+#      example.net and their subdomains). Spectra writes `created_by` and `archived_by` as
+#      "name <email>" from git config into docs/spectra/changes/**/.openspec.yaml; keep the
+#      name and remove the address (MacHelpdesk/mac-disk-space#9).
 #
 # Usage: scripts/check-privacy.sh        (from the repo root)
 
@@ -21,6 +25,8 @@ PRIVATE_IP='(^|[^0-9.])(10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|172\.(1[6-9]|2[0-
 HOME_PATH='/(Users|home)/[A-Za-z0-9._-]+/'
 UUID='[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}'
 ZERO_UUID='00000000-0000-0000-0000-000000000000'
+EMAIL='[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+\.)+[A-Za-z]{2,}'
+EXAMPLE_EMAIL='@([A-Za-z0-9-]+\.)*example\.(com|org|net)([^A-Za-z0-9.-]|$)'
 
 found=0
 report() { # label pattern
@@ -45,9 +51,16 @@ if [ -n "$uuids" ]; then
   found=1
 fi
 
+# each address on a line is checked on its own, so an example address cannot hide a real one
+emails="$(git grep -n -I -o -E "$EMAIL" -- . ':(exclude)scripts/check-privacy.sh' 2>/dev/null | grep -vE "$EXAMPLE_EMAIL")"
+if [ -n "$emails" ]; then
+  printf 'email address:\n%s\n\n' "$emails"
+  found=1
+fi
+
 if [ "$found" -eq 0 ]; then
   echo "privacy check passed"
 else
-  echo "privacy check failed: replace the values above with RFC 5737 addresses, the all-zero UUID or placeholders" >&2
+  echo "privacy check failed: replace the values above with RFC 5737 addresses, the all-zero UUID, example.com addresses or placeholders" >&2
 fi
 exit "$found"
