@@ -48,3 +48,4 @@ MacHelpdesk 系列的磁碟空間工具。整個系列共用的規則（公開 r
 - 系統輸入都有 `DISK_SPACE_*` 覆寫，測試用 `tests/fixtures/` 與 `tests/stubs/`，不碰真的磁碟、快照與雲端。
 - macOS 沒有 `timeout`，時間上限用 `run_limited` 輪詢；背景工作被結束時 bash 會印提示，只在那兩個呼叫上擋 stderr，不要整段擋（會吞掉候選清單的錯誤回報）。
 - 個人紀錄放 `~/.config/mac-disk-space/`，`.gitignore` 已擋相關檔名。
+- **Spectra 會把 git 的信箱寫進 `.openspec.yaml`**（`created_by`、`archived_by` 寫成「名字 <信箱>」），而且沒有設定可以關掉。每次 `spectra new change` 或 `spectra archive` 之後，把信箱拿掉、只留名字；`scripts/check-privacy.sh` 會擋下忘了拿掉的（MacHelpdesk/mac-disk-space#9）。封存的檔案在 `archive/` 底下，先跑 `/archive-first:archived-unlock`，改完重新上鎖。
